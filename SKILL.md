@@ -18,13 +18,35 @@ license: MIT
 or non-government sources are handled by the agent's native web search tools, not
 this skill.
 
-## You are a coding agent with a function library
+## You are a coding agent with a library of reusable programs
 
 This skill gives you a growing library of **runnable, docstring-documented
-functions** under `programs/` — one function per capability, grouped by
-department/org. Each function returns JSON-serializable data (it never prints);
-its docstring tells you what data it provides, its dataset ID, endpoints, and
-known quirks.
+functions** under `programs/` — each one a **reusable capability over one
+data.gov.hk API/dataset**, grouped by department/org. Each function returns
+JSON-serializable data (it never prints); its docstring says what data it
+provides, its dataset ID, endpoints, and quirks.
+
+**A program answers a *class* of questions, not one specific question.**
+`address_lookup(q)` is the reusable capability; "where is the Housing Authority
+headquarters?" is a query you answer *with* it. Write a program only when you
+find a dataset/API that a whole family of future questions will need — never for
+a single concrete fact.
+
+### Think in programs before you search
+
+When a question arrives, first decompose it: **what program / function / API /
+dataset would produce this answer?** Then retrieve those primitives and compose
+them, rather than reaching for web search or a one-off:
+
+```text
+"what's the Housing Authority HQ address, and the bus from Un Chau Estate?"
+    → address_lookup("Housing Authority Headquarters")   # geocode → 33 Fat Kwong St
+    → kmb_routes()                                        # find Cheung Sha Wan → Ho Man Tin (route 18)
+```
+
+A specific fact (an address, a coordinate, a route) is usually *retrievable
+through an existing primitive* — compose your programs first. Only fall through
+to exploration (Path B) when no program or catalog dataset can produce it.
 
 Answer a question in **two paths**, not a fixed set of steps:
 
@@ -55,9 +77,10 @@ bash "$SKILL_DIR/hk.sh" info "<dataset-id>"          # metadata + endpoint URLs
 bash "$SKILL_DIR/hk.sh" test "<endpoint-url>"        # fetch + detect JSON/XML/CSV
 ```
 
-Once you have a working recipe, **write it as a function** under
-`programs/<org>/<file>.py` (copy `programs/_template.py` for the docstring
-contract), combine it with any existing function to answer, then index it:
+Once you have a working recipe, **write it as a reusable function** (a whole class
+of questions, not this one instance) under `programs/<org>/<file>.py` (copy
+`programs/_template.py` for the docstring contract), combine it with any existing
+function to answer, then index it:
 
 ```bash
 bash "$SKILL_DIR/hk.sh" reindex
