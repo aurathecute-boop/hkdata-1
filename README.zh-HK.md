@@ -159,13 +159,6 @@ bash ./hk.sh catalog-embed && bash ./hk.sh reindex
 
 介面用法請見 [SETUP.md](SETUP.md) *「Integrating a new backend」*。
 
-## 撰寫程式
-
-把 [`programs/_template.py`](programs/_template.py) 複製到正確的
-`programs/<部門>/` 子資料夾。一個程式就是一個函數，其 docstring 以**數據提供什麼**
-為首，並列明 dataset ID、endpoint、用法、示例問題與已知陷阱。函數回傳可 JSON
-序列化的資料、不 `print`。寫好後執行 `bash ./hk.sh reindex`。
-
 ## 目錄結構
 
 ```
@@ -177,6 +170,13 @@ scripts/hkdata/           CLI + 引擎（catalog.py、vectors.py、programs.py �
 data/catalog/             已清除個人資料的 catalog shard（committed）
 tests/                    pytest 測試
 ```
+
+## 撰寫程式
+
+把 [`programs/_template.py`](programs/_template.py) 複製到正確的
+`programs/<部門>/` 子資料夾。一個程式就是一個函數，其 docstring 以**數據提供什麼**
+為首，並列明 dataset ID、endpoint、用法、示例問題與已知陷阱。函數回傳可 JSON
+序列化的資料、不 `print`。寫好後執行 `bash ./hk.sh reindex`。
 
 ## 範圍
 
@@ -190,6 +190,13 @@ tests/                    pytest 測試
 `data/catalog/` 中的 shard 是 `package_show` 回應的**去識別化投影**：個人聯絡資料
 （作者／維護者的電郵與電話）會被剔除，只保留搜尋所需的欄位。JSONL 資料庫隨時可以
 用 `catalog-sync` 重新產生。
+
+### 延伸閱讀
+
+- [data.gov.hk 開發者指南](https://data.gov.hk/en/help/developer-guide)
+- [CKAN API 說明文件](https://docs.ckan.org/en/latest/api/)
+- [香港政府統計處](https://www.censtatd.gov.hk/)
+- [香港天文台](https://www.hko.gov.hk/)
 
 ## 測試
 
