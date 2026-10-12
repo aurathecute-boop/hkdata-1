@@ -48,7 +48,8 @@ if [ ! -t 0 ]; then
     case "$lsha" in 0000000*|"") continue ;; esac
     base="$rsha"
     case "$rsha" in 0000000*|"") base="$(git hash-object -t tree /dev/null)" ;; esac
-    incoming="${incoming}$(git diff --name-only "$base" "$lsha" 2>/dev/null || true)"$'\n'
+    # --diff-filter=d omits deleted paths: removing a file is not a leak.
+    incoming="${incoming}$(git diff --name-only --diff-filter=d "$base" "$lsha" 2>/dev/null || true)"$'\n'
   done
 fi
 if [ -z "$incoming" ]; then
