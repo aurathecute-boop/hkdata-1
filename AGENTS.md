@@ -1,24 +1,28 @@
 # AGENTS.md
 
-This is an AI-agent **skill** directory, not an application. There is no build, lint, or typecheck (there is a pytest suite). The entrypoint is `SKILL.md`, which defines a mandatory 5-step dataset discovery workflow. Everything below is stuff `SKILL.md` implies but an agent commonly gets wrong.
+This is an AI-agent **skill** directory, not an application. There is no build, lint,
+or typecheck (there is a pytest suite). The entrypoint is `SKILL.md`, which frames the
+agent as a **coding agent** with a library of runnable functions. Everything below is
+stuff `SKILL.md` implies but an agent commonly gets wrong.
 
 ## Running the scripts
 
-First-time setup (venv, Ollama model, vector store) is in [`SETUP.md`](SETUP.md).
+First-time setup (venv, Ollama model, vector stores) is in [`SETUP.md`](SETUP.md).
 
-Always invoke from the skill root via `bash ./hk.sh <subcommand>` — the wrapper picks the venv interpreter (needed by search/embed commands, which require `chromadb`) and falls back to `python3` otherwise. Never run `./hk.sh` directly; from another cwd, use the absolute path (`bash ~/.agents/skills/hkdata/hk.sh …` for the symlink install) — the wrapper is cwd-safe, but the doc text that names `./` paths assumes the skill root. All paths in `SKILL.md` and the reference docs are `./`-relative.
+Always invoke from the skill root via `bash ./hk.sh <subcommand>` — the wrapper picks
+the venv interpreter (needed by search/embed commands, which require `chromadb`) and
+falls back to `python3` otherwise. Never run `./hk.sh` directly; from another cwd, use
+the absolute path (`bash ~/.agents/skills/hkdata/hk.sh …` for the symlink install) —
+the wrapper is cwd-safe, but the doc text that names `./` paths assumes the skill root.
+All paths in `SKILL.md` and the reference docs are `./`-relative.
 
 ```bash
-# step 1: past experience
-bash ./hk.sh experience-search "<keyword>" [--kind positive|negative]
-bash ./hk.sh experience-log --kind positive --topic "..." --dataset <id> --method "..."
-# step 2: the full catalog
-bash ./hk.sh catalog-search "<keyword>"
-# catalog maintenance
-bash ./hk.sh catalog-sync [--full] [--lang en,tc]
-bash ./hk.sh catalog-embed
-bash ./hk.sh catalog-status
-# metadata / endpoint inspection
+# Path A — a runnable program already covers the question
+bash ./hk.sh programs-search "<query>" [--source] [--json]
+bash ./hk.sh reindex                       # extract + embed programs, render the registry
+bash ./hk.sh programs-status               # library + vector-store report
+# Path B — explore, then write a program
+bash ./hk.sh catalog-search "<keyword>"    # full ~3,822-dataset catalog
 bash ./hk.sh info "<dataset-id>"
 bash ./hk.sh test "<endpoint-url>"
 ```
@@ -26,82 +30,75 @@ bash ./hk.sh test "<endpoint-url>"
 Under the hood this is `"$PWD/.venv/bin/python" ./scripts/hkdata.py <subcommand>`
 (or `python3 ./scripts/hkdata.py <subcommand>` when no venv exists).
 
-Core dependency for the catalog is `python3` (stdlib) for crawling, but **search
-requires the venv**: `chromadb` + a local Ollama model (`embeddinggemma-2:740m`).
-There is no SQLite/FTS5 fallback and no CKAN search anymore — the CKAN
-`package_search` API has been retired from this skill.
-
 ## The one gotcha that wastes the most time
 
-CKAN's `package_search` is **Solr-backed and covers only ~631 of the ~3,822 datasets**
-that the DB-backed `package_list` returns. That is why the old `search` command missed
-`badminton`, `vessel`, `AQHI`, `ferry`, and Chinese keywords. It has been removed; the
+There are **two retrieval layers, and they answer different questions**:
+
+- `programs-search` — the **program library** (`programs/*.py`), the functions
+  you have actually written and verified. Small, curated, runnable.
+- `catalog-search` — the **full catalog** (`data/catalog/*.jsonl`, ~3,822
+  datasets). This is the discovery fallback for anything with no program yet.
+
+A query that misses in `programs-search` must fall through to `catalog-search`,
+then `info`/`test`, then you **write a program and `reindex`**. That is the whole
+learning loop.
+
+CKAN's `package_search` is **Solr-backed and covers only ~631 of the ~3,822
+datasets** that the DB-backed `package_list` returns. It has been removed; the
 catalog is crawled once via `package_list` + `package_show` into JSONL shards
 (`data/catalog/`, sanitized PII-free) and searched through ChromaDB.
 
-Search in two steps: `experience-search` (past positive/negative lessons, Step 1) then
-`catalog-search` (the catalog, Step 2). Experiences are dated and can be superseded —
-check the date and re-test live endpoints.
-
 If a store is empty, it is probably not built:
-1. `bash ./hk.sh catalog-sync --full --lang en,tc` (once, ~2 h, resumable)
-2. `bash ./hk.sh catalog-embed && bash ./hk.sh experience-embed`
-3. Then search with `bash ./hk.sh catalog-search "<topic>"`
+1. `bash ./hk.sh catalog-sync --full --lang en,tc` (once, ~2 h, resumable) — only if shards are missing
+2. `bash ./hk.sh catalog-embed && bash ./hk.sh reindex`
+3. Then search with `bash ./hk.sh programs-search "<topic>"` or `catalog-search "<topic>"`
 
-After a successful (or failed) discovery, record it:
-`bash ./hk.sh experience-log --kind positive|negative …`
+## Writing a program (the new "memory write")
 
-Otherwise fall back to:
-1. `bash ./hk.sh log-search "<topic>" "0 results"` — recorded workarounds.
-2. Web search `site:data.gov.hk <topic> lcsd` (or `... transport`, `... census`).
-3. Feed the ID to `bash ./hk.sh info "<dataset-id>"`.
-4. Record the outcome as an experience and re-render the views:
-   `bash ./hk.sh experience-log --kind negative …`
-   then `bash ./hk.sh log-render`.
+When Path B lands on a working recipe, persist it as a function — this is the
+replacement for the old experience card, and it is the **hard gate**: until a
+program is written and indexed, the discovery is not "remembered".
 
-## Step 5 is a memory write, not a documentation gate
+1. Copy `programs/_template.py` into the right `programs/<org>/<file>.py`.
+2. One **function = one capability**; group related functions in one file.
+3. Docstring leads with **what the data provides** (`Provides`), then `Coverage`,
+   `Datasets`, `Department`, `Endpoint`, `Usage`, `Questions`, `Quirks`.
+   `Questions` is the retrieval aid — write several rewordings.
+4. The function returns JSON-serializable data and **never prints**; imports go
+   *inside* the function so the returned source runs standalone in a heredoc.
+5. `bash ./hk.sh reindex` — embeds the docstrings and renders `programs/index.md`
+   (a generated view — never edit it by hand).
 
-`SKILL.md`'s Step 5 records every discovery as an experience card (positive or
-negative) via `experience-log`, then `log-render`. The canonical hard gate is
-there; the repo-side specifics for **reference docs** apply only when the recipe
-is non-trivial (endpoint quirks, multi-endpoint joins, proxy logic):
-1. `cp ./references/template.md ./references/{category}-{dataset}.md` and fill it in.
-2. Run `bash ./hk.sh reindex` — it rebuilds `references/search-index.json` and the generated `references/index.md` registry (never edit `index.md` by hand).
-3. Cite the doc via `--source` on `experience-log`.
-4. One outcome → one card, and never both kinds for the same outcome.
+A program that has not run against the live endpoint is not done: `test` the URL
+first, then write the function from what you observed.
 
-## Category → filename prefix mapping (non-obvious ones)
+## Org → subpackage guidance
 
-Reference files are named `{prefix}-{dataset}.md`. Most prefixes match the data.gov.hk category, but these differ and agents guess them wrong:
-
-| data.gov.hk category | File prefix |
-|---|---|
-| `commerce-and-industry` | `commerce-` |
-| `law-and-security` | `security-` |
-| `city-management` | `city-` |
-| `employment-and-labour` | `employment-` |
-| `recreation-and-culture` | `recreation-` |
-| `social-welfare` | `welfare-` |
-| `information-technology-and-broadcasting` | `it-` |
-| `development` | `location-` |
-
-Full mapping is in [`references/category-mapping.md`](references/category-mapping.md).
-
-## Conventions for the rendered log views
-
-`logs/failure-log.md` and `logs/strategy-registry.md` are **rendered views** of the canonical experience store (`data/experiences.jsonl`): the failure log shows **negative** experiences, the strategy registry shows **positive** ones. Do not edit the markdown by hand — record an experience (`experience-log`) and run `bash ./hk.sh log-render`. Existing entries are partly in **Cantonese**; keep that language when adding related experiences.
+Program files are grouped by **department/org**, not by the data.gov.hk category.
+Use short slugs (`lcsd/`, `td/`, `hko/`, `epd/`, `gpa/`, `housing/`, `censtatd/`, …).
+A function that joins two departments lives under its **primary** org and declares
+**all** dataset IDs it touches in `Datasets:`. The complex transport multi-endpoint
+joins (KMB route-finder, ferry+vessel, film-fund ROI) are deliberately deferred.
 
 ## Scope boundary
 
-Only Hong Kong government data from data.gov.hk. Non-HK data, non-government sources, or general web queries are out of scope — redirect those to the agent's native web search. Do not try to satisfy them with this skill.
+Only Hong Kong government data from data.gov.hk. Non-HK data, non-government
+sources, or general web queries are out of scope — redirect those to the agent's
+native web search. Do not try to satisfy them with this skill.
 
 ## Subagent delegation
 
-For complex discovery you may spawn a **single** subagent with shell and file access to run Steps 2–5 end-to-end. Do not split into multiple subagents. Use the highest-reasoning model available in your agent tool. A worked example and response templates are in [`references/workflow-guides.md`](references/workflow-guides.md).
+For complex discovery you may spawn a **single** subagent with shell and file
+access to run Path B end-to-end (catalog-search → info → test → write program →
+reindex). Do not split into multiple subagents. Use the highest-reasoning model
+available in your agent tool.
 
 ## End-to-end test (clean clone)
 
-Verifies the **public** artifact actually runs — an agent following `SETUP.md` then `SKILL.md` from a fresh clone. Run it before a release or after large changes. The private knowledge layer (`data/experiences.jsonl`, `references/*.md`, `references/index.md`, `references/search-index.json`, `logs/`, `.cache/`) is gitignored; a clone carrying only the engine is exactly what the test checks.
+Verifies the **public** artifact actually runs — an agent following `SETUP.md`
+then `SKILL.md` from a fresh clone. Run it before a release or after large
+changes. The generated `programs/index.md` registry is gitignored; a clone
+carrying only the engine + `programs/*.py` is exactly what the test checks.
 
 1. `e2e-test/` is gitignored. Clean it and clone the **public remote** (not a local copy):
    ```bash
@@ -111,34 +108,34 @@ Verifies the **public** artifact actually runs — an agent following `SETUP.md`
 2. Spawn **one** high-reasoning subagent (shell + file access). It must:
    - work only inside `e2e-test/hkdata`; never read/write the working repo or `~/.agents/skills/hkdata`;
    - **not** use `SKILL.md`'s root-resolution snippet — the `~/.agents/skills/hkdata` symlink points at the private repo and would silently contaminate the run. Set `export HKDATA_SKILL_DIR=$PWD` inside the clone and run `bash ./hk.sh …`;
-   - follow `SETUP.md` steps 1–5, then `SETUP.md` §6 — the 3 hard questions through the **full** `SKILL.md` loop (Steps 1→5, one `experience-log` card each);
+   - follow `SETUP.md` steps 1–5, then `SETUP.md` §6 — the 3 hard questions through the **full** two-path loop (Path A → Path B, one written program + `reindex` each);
    - write raw commands + output to `e2e-test/REPORT.md` with a verdict and a per-finding PASS/FAIL table.
-3. Expect ~59 tracked files and a green `bash ./hk.sh`-driven run; the suite needs `requirements-dev.txt`. No BLOCKER = pass.
+3. Expect ~64 tracked files and a green `bash ./hk.sh`-driven run; the suite needs `requirements-dev.txt`. No BLOCKER = pass.
 
 ## Keeping SKILL.md minimal
 
 `SKILL.md` is the **runtime entrypoint** — what a skill consumer reads to answer a
-query. Keep it to the workflow contract only. It must not grow when datasets are
+query. Keep it to the two-path contract only. It must not grow when programs are
 added, and it must not carry development, setup, or maintenance material:
 
 | Content | Belongs in |
 |---|---|
-| Query workflow (Steps 1–5), fallback, answer contracts | `SKILL.md` |
+| Two-path workflow, program docstring contract, answer contract | `SKILL.md` |
 | First-run install, venv, Ollama, building/refreshing the stores | `SETUP.md` |
 | CLI reference, architecture, attribution | `README.md` |
 | Repo upkeep, conventions, gotchas for maintainers | `AGENTS.md` |
 | Response templates, deep guidance, failure patterns | `references/workflow-guides.md` |
 
-Verified datasets live in `references/index.md` (a registry generated by `reindex`), the category mapping in
-`references/category-mapping.md`, and experience history in `logs/`.
+The program library lives in `programs/`; its generated registry is
+`programs/index.md` (built by `reindex`). The old `references/<dataset>.md` recipes
+are being migrated into `programs/` and will be removed.
 
 ## Weekly self-evolution review (every 7 days)
 
-1. Read `data/experiences.jsonl` (and the rendered views in `logs/`)
-2. Identify patterns: common failure causes, effective fallback strategies,
-   experiences whose `date` is stale or superseded
+1. Read the program library (`programs/*.py`) and `programs/index.md`
+2. Identify patterns: stale endpoints, quirks worth folding into docstrings,
+   functions that overlap and should be merged
 3. Update `references/workflow-guides.md` and `AGENTS.md` if guidance changes
-4. Archive/dedupe experiences, then `experience-migrate` + `experience-embed`
-5. Run `bash ./hk.sh log-render` after cleanup
+4. Re-test any program whose endpoint looks stale, then `bash ./hk.sh reindex`
 
 **Trigger:** spawn a single subagent with the task "hkdata weekly self-evolution review".

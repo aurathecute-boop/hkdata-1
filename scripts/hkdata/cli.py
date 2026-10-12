@@ -10,12 +10,10 @@ from typing import List
 
 from . import __version__
 from . import catalog
-from . import experience
+from . import programs
 from . import vectors
 from .common import USER_AGENT
 from .inspect import info_multiple
-from .index import build_index, render_index_md, save_index, search_local
-from .logs import log_search, render
 from .parse import parse_data
 
 
@@ -99,51 +97,76 @@ def cmd_test(args: argparse.Namespace) -> int:
     return exit_code
 
 
-def cmd_reindex(args: argparse.Namespace) -> int:
-    index = build_index()
-    save_index(index)
-    render_index_md(index)
-    _eprint(f"Rebuilt references/search-index.json and references/index.md "
-            f"with {index['count']} datasets.")
-    return 0
+# ---------------------------------------------------------------------------
+# Programs (runnable, indexed functions) commands
+# ---------------------------------------------------------------------------
 
 
-def cmd_search_local(args: argparse.Namespace) -> int:
+def cmd_programs_search(args: argparse.Namespace) -> int:
+    if not _require_chromadb():
+        return 1
     query = " ".join(args.keywords)
-    results = search_local(query, top_n=args.top_n)
-    if not results:
-        print("No matching verified datasets found.")
+    paths = catalog.default_paths()
+    embedder = _resolve_embedder(args)
+    _warn_store_mismatch(paths, programs.COLLECTION_NAME, embedder)
+    try:
+        hits = programs.search(
+            query, top_n=args.top_n, embed_fn=embedder.embed,
+            query_instruction=embedder.query_instruction)
+    except RuntimeError as exc:
+        _eprint(f"Error: {exc}")
+        return 1
+    if args.json:
+        print(json.dumps(hits, ensure_ascii=False, indent=2))
         return 0
-    for rtype, score, record in results:
-        if rtype == "dataset":
-            print(
-                f"{score:.2f} | {record['id']} | {record['title']} | "
-                f"{record['category']} | {record['filename']}"
-            )
-        else:
-            # The record title already carries a "[kind]" prefix — don't repeat it.
-            print(
-                f"{score:.2f} | {record['title']} | "
-                f"{record['description'][:120]}..."
-            )
+    if not hits:
+        print(f"No program matches for: {query}")
+        return 0
+    for n, item in enumerate(hits, start=1):
+        datasets = ", ".join(item.get("datasets") or []) or "-"
+        dept = item.get("department") or "-"
+        print(f"{n}. {item['score']:.4f} | {item['id']} | {item['signature']}")
+        print(f"   {datasets} | {dept}")
+        if args.source:
+            print("---- source ----")
+            print(item["source"])
+            print("----------------")
     return 0
 
 
-def cmd_log_search(args: argparse.Namespace) -> int:
-    names = list(args.names) if args.names else ["failure-log", "strategy-registry"]
-    keywords = list(args.keywords)
-    results = log_search(names, keywords)
-    if not results:
-        print("No matching experiences.")
+def cmd_programs_status(args: argparse.Namespace) -> int:
+    info = programs.status()
+    if args.json:
+        print(json.dumps(info, ensure_ascii=False, indent=2))
         return 0
-    for record in results:
-        print(json.dumps(record, ensure_ascii=False, indent=2))
+    print(f"Program files:  {info['program_files']}")
+    print(f"Functions:      {info['functions']}")
+    vec = info.get("vectors") or {}
+    if vec.get("available"):
+        print(f"Vector store:   {vec.get('count', 0)} functions")
+    else:
+        print("Vector store:   unavailable (install chromadb in the venv)")
     return 0
 
 
-def cmd_log_render(args: argparse.Namespace) -> int:
-    render()
-    _eprint("Rendered logs/failure-log.md and logs/strategy-registry.md from experiences.")
+def cmd_reindex(args: argparse.Namespace) -> int:
+    records = programs.extract()
+    programs.render_registry(records)
+    if not vectors.have_chromadb():
+        _eprint(f"Rendered programs/index.md ({len(records)} functions). "
+                f"ChromaDB not installed — install it (SETUP.md) to build the "
+                f"search store.")
+        return 0
+    embedder = _resolve_embedder(args)
+    try:
+        result = programs.build_vectors(
+            model=embedder.fingerprint, embed_fn=embedder.embed_documents,
+            batch=args.batch)
+    except RuntimeError as exc:
+        _eprint(f"Error: {exc}")
+        return 1
+    _eprint(f"Program store ready: {result['total']} functions "
+            f"({embedder.fingerprint}); programs/index.md rendered.")
     return 0
 
 
@@ -219,113 +242,6 @@ def cmd_catalog_search(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_experience_search(args: argparse.Namespace) -> int:
-    if not _require_chromadb():
-        return 1
-    query = " ".join(args.keywords)
-    paths = catalog.default_paths()
-    embedder = _resolve_embedder(args)
-    if experience.count(paths) == 0:
-        print("No experiences yet. Run: hkdata.py experience-migrate && "
-              "hkdata.py experience-embed")
-        return 0
-    _warn_store_mismatch(paths, experience.COLLECTION_NAME, embedder)
-    try:
-        hits = experience.search(
-            query, top_n=None, offset=0, min_sim=args.min_sim, kind=args.kind,
-            embed_fn=embedder.embed,
-            query_instruction=embedder.query_instruction)
-    except RuntimeError as exc:
-        _eprint(f"Error: {exc}")
-        return 1
-    if args.json:
-        print(json.dumps(hits, ensure_ascii=False, indent=2))
-        return 0
-    if not hits:
-        print("No relevant experience card found.")
-        return 0
-
-    per_page = args.top_n if args.top_n is not None else args.per_page
-    per_page = max(1, per_page)
-    page = max(1, args.page)
-    total = len(hits)
-    pages = (total + per_page - 1) // per_page
-    offset = (page - 1) * per_page
-    window = hits[offset:offset + per_page]
-    if not window:
-        print(f"No results on page {page} — {total} experience(s), "
-              f"{pages} page(s).")
-        return 0
-    print(f"Showing {offset + 1}-{offset + len(window)} of {total} experiences "
-          f"(page {page}/{pages})")
-    print()
-    for n, item in enumerate(window, start=offset + 1):
-        topic = " ".join(str(item["topic"]).split())
-        source = " ".join(str(item["source"]).split())
-        datasets = ", ".join(" ".join(str(d).split()) for d in item["datasets"]) or "-"
-        print(f"{n}. [{item['kind']}] {topic} | {datasets} | "
-              f"{item['date'] or '-'} | {source}")
-    return 0
-
-
-def cmd_experience_log(args: argparse.Namespace) -> int:
-    outcome = (args.outcome or "").strip()
-    if outcome in experience.NEGATIVE_OUTCOMES and args.kind != "negative":
-        _eprint(f"Warning: outcome '{outcome}' implies a negative card; "
-                f"pass --kind negative (got '{args.kind}').")
-    exp = {
-        "kind": args.kind,
-        "topic": args.topic,
-        "query_patterns": args.pattern or [],
-        "category": args.category or "",
-        "datasets": args.dataset or [],
-        "method": args.method or "",
-        "endpoint": args.endpoint or "",
-        "outcome": outcome,
-        "caveats": args.caveat or [],
-        "source": args.source or "manual",
-        "date": args.date,
-        "last_verified": args.date,
-    }
-    upsert = vectors.have_chromadb()
-    embedder = _resolve_embedder(args)
-    try:
-        record = experience.append_experience(
-            exp, model=embedder.fingerprint, embed_fn=embedder.embed_documents,
-            upsert=upsert)
-    except RuntimeError as exc:
-        _eprint(f"Error: {exc}")
-        return 1
-    if not upsert:
-        _eprint("ChromaDB not installed — appended to JSONL only; "
-                "run 'experience-embed' later.")
-    print(record["id"])
-    return 0
-
-
-def cmd_experience_embed(args: argparse.Namespace) -> int:
-    if not _require_chromadb():
-        return 1
-    embedder = _resolve_embedder(args)
-    try:
-        result = experience.embed_experiences(
-            model=embedder.fingerprint, embed_fn=embedder.embed_documents,
-            batch=args.batch)
-    except RuntimeError as exc:
-        _eprint(f"Error: {exc}")
-        return 1
-    _eprint(f"Experience store ready: {result['total']} cards "
-            f"({embedder.fingerprint}).")
-    return 0
-
-
-def cmd_experience_migrate(args: argparse.Namespace) -> int:
-    result = experience.migrate()
-    _eprint(f"Experiences: {result['positive']} positive, "
-            f"{result['negative']} negative.")
-    return 0
-
-
 def cmd_catalog_status(args: argparse.Namespace) -> int:
     paths = catalog.default_paths()
     data = catalog.status(paths)
@@ -345,7 +261,7 @@ def cmd_catalog_status(args: argparse.Namespace) -> int:
             print(f"Vector store:  {count} datasets")
         else:
             print("Vector store:  empty (run: catalog-embed)")
-        print(f"Experiences:   {experience.count(paths)} cards")
+        print(f"Programs:      {len(programs.extract())} functions")
     else:
         print("Vector store:  unavailable (install chromadb in the venv)")
     print(f"Last full sync: {data['last_full_sync'] or '-'}")
@@ -358,14 +274,14 @@ def cmd_embed_status(args: argparse.Namespace) -> int:
     embedder = _resolve_embedder(args)
     catalog_status = vectors.embed_status(paths, vectors.COLLECTION_NAME,
                                           embedder=embedder)
-    exp_status = vectors.embed_status(paths, experience.COLLECTION_NAME,
-                                      embedder=embedder)
+    prog_status = vectors.embed_status(paths, programs.COLLECTION_NAME,
+                                       embedder=embedder)
     if args.json:
         print(json.dumps({"embedder": {"provider": embedder.name,
                                        "model": embedder.model,
                                        "fingerprint": embedder.fingerprint},
                           "catalog": catalog_status,
-                          "experiences": exp_status},
+                          "programs": prog_status},
                          ensure_ascii=False, indent=2))
         return 0
     print(f"Provider:    {embedder.name}")
@@ -374,7 +290,7 @@ def cmd_embed_status(args: argparse.Namespace) -> int:
     print(f"Registered:  {', '.join(vectors.registered_providers())}")
     rebuild = False
     for label, status in (("catalog", catalog_status),
-                          ("experiences", exp_status)):
+                          ("programs", prog_status)):
         if not status.get("available"):
             print(f"{label}: unavailable")
             continue
@@ -425,27 +341,28 @@ def build_parser() -> argparse.ArgumentParser:
     test_parser.add_argument("urls", nargs="+", help="One or more endpoint URLs")
     test_parser.set_defaults(func=cmd_test)
 
-    reindex_parser = subparsers.add_parser("reindex", help="Rebuild local search index")
+    prog_search = subparsers.add_parser(
+        "programs-search", help="Semantic search over runnable program functions")
+    prog_search.add_argument("keywords", nargs="+", help="Natural-language query")
+    prog_search.add_argument("--top-n", type=int, default=5,
+                             help="Max results (default: 5)")
+    prog_search.add_argument("--source", action="store_true",
+                             help="Print the full function source")
+    _add_embed_args(prog_search)
+    prog_search.add_argument("--json", action="store_true", help="JSON output")
+    prog_search.set_defaults(func=cmd_programs_search)
+
+    prog_status = subparsers.add_parser(
+        "programs-status", help="Show the program library and vector store")
+    prog_status.add_argument("--json", action="store_true", help="JSON output")
+    prog_status.set_defaults(func=cmd_programs_status)
+
+    reindex_parser = subparsers.add_parser(
+        "reindex", help="Extract + embed program functions and render the registry")
+    _add_embed_args(reindex_parser)
+    reindex_parser.add_argument("--batch", type=int, default=vectors.EMBED_BATCH,
+                                help=f"Embedding batch size (default: {vectors.EMBED_BATCH})")
     reindex_parser.set_defaults(func=cmd_reindex)
-
-    search_local_parser = subparsers.add_parser("search-local", help="Search verified dataset index")
-    search_local_parser.add_argument("keywords", nargs="+", help="Natural-language query")
-    search_local_parser.add_argument("--top-n", type=int, default=10, help="Max results (default: 10)")
-    search_local_parser.set_defaults(func=cmd_search_local)
-
-    log_search_parser = subparsers.add_parser(
-        "log-search", help="Lexical search of experiences (by kind)")
-    log_search_parser.add_argument("keywords", nargs="+", help="Keywords to search")
-    log_search_parser.add_argument(
-        "--names",
-        nargs="+",
-        help="Log files to search (default: failure-log strategy-registry)",
-    )
-    log_search_parser.set_defaults(func=cmd_log_search)
-
-    log_render_parser = subparsers.add_parser(
-        "log-render", help="Regenerate the logs/ markdown views from experiences")
-    log_render_parser.set_defaults(func=cmd_log_render)
 
     catalog_sync_parser = subparsers.add_parser(
         "catalog-sync", help="Seed/crawl the offline catalog (package_list + package_show)")
@@ -487,50 +404,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_embed_args(embed_status_parser)
     embed_status_parser.add_argument("--json", action="store_true", help="JSON output")
     embed_status_parser.set_defaults(func=cmd_embed_status)
-
-    exp_search = subparsers.add_parser(
-        "experience-search", help="Semantic search over past experiences (positive/negative)")
-    exp_search.add_argument("keywords", nargs="+", help="Natural-language query")
-    exp_search.add_argument("--page", type=int, default=1, help="Page number, 1-based (default: 1)")
-    exp_search.add_argument("--per-page", type=int, default=5, help="Results per page (default: 5)")
-    exp_search.add_argument("--top-n", type=int, default=None,
-                            help="Alias for --per-page (kept for compatibility)")
-    exp_search.add_argument("--min-sim", type=float, default=experience.DEFAULT_MIN_SIM,
-                            help="Minimum cosine similarity to show a card (default: 0.5)")
-    exp_search.add_argument("--kind", choices=["positive", "negative"],
-                            help="Only return this kind of experience")
-    _add_embed_args(exp_search)
-    exp_search.add_argument("--json", action="store_true",
-                            help="JSON output (all matches, unpaged)")
-    exp_search.set_defaults(func=cmd_experience_search)
-
-    exp_log = subparsers.add_parser(
-        "experience-log", help="Record a new experience and index it")
-    exp_log.add_argument("--kind", choices=["positive", "negative"], default="positive")
-    exp_log.add_argument("--topic", required=True, help="Short description")
-    exp_log.add_argument("--pattern", action="append", help="Example query (repeatable)")
-    exp_log.add_argument("--category", help="Category / component")
-    exp_log.add_argument("--dataset", action="append", help="Dataset ID (repeatable)")
-    exp_log.add_argument("--method", help="What worked (or the dead end)")
-    exp_log.add_argument("--endpoint", help="Endpoint URL")
-    exp_log.add_argument("--outcome", choices=experience.OUTCOMES,
-                         help="Controlled verdict: verified / located / resolved / "
-                              "unavailable / pitfall")
-    exp_log.add_argument("--caveat", action="append", help="Caveat (repeatable)")
-    exp_log.add_argument("--source", help="Where this came from (default: manual)")
-    exp_log.add_argument("--date", default=time.strftime("%Y-%m-%d"), help="Date (YYYY-MM-DD)")
-    _add_embed_args(exp_log)
-    exp_log.set_defaults(func=cmd_experience_log)
-
-    exp_embed = subparsers.add_parser(
-        "experience-embed", help="Build the ChromaDB experience index")
-    _add_embed_args(exp_embed)
-    exp_embed.add_argument("--batch", type=int, default=vectors.EMBED_BATCH)
-    exp_embed.set_defaults(func=cmd_experience_embed)
-
-    exp_migrate = subparsers.add_parser(
-        "experience-migrate", help="Seed experiences.jsonl from references and logs")
-    exp_migrate.set_defaults(func=cmd_experience_migrate)
 
     return parser
 

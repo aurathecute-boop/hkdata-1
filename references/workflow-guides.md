@@ -14,16 +14,14 @@ According to the Census and Statistics Department (data.gov.hk):
 **Hong Kong Population (mid-2024): 7,523,000**
 
 **Methodology:**
-Followed hkdata/SKILL.md discovery workflow:
-1. ✅ Checked verified datasets — Found `population-census.md`
-2. ✅ Read reference file — Confirmed API endpoint
-3. ✅ Executed API — Retrieved mid-2024 population data
+Followed hkdata/SKILL.md two-path workflow:
+1. ✅ `programs-search "hong kong population"` — retrieved the population program
+2. ✅ Ran its function — retrieved mid-2024 population data
 
 **Dataset Details:**
 - **Source:** Census and Statistics Department
 - **Dataset ID:** `hk-censtatd-tablechart-110-02001`
 - **API:** `https://www.censtatd.gov.hk/api/get.php?id=110-02001&lang=en&full_series=1`
-- **Reference:** [population-census.md](population-census.md)
 
 ### Template Structure
 
@@ -113,12 +111,12 @@ State the temporality in the answer when it affects interpretation (e.g., "last 
 | Failure Type | Recovery Action |
 |---|---|
 | Network / download failure | Retry once; if still failing, fall back to most recent verified reference data and flag output as stale with date |
-| `catalog-search` returns no useful results | Try `log-search` → web search `site:data.gov.hk <topic>`; if the store is empty, run `catalog-sync --full` then `catalog-embed` |
+| `catalog-search` returns no useful results | Web search `site:data.gov.hk <topic>`; if the store is empty, run `catalog-sync --full` then `catalog-embed` |
 | Missing file / dependency | Verify `python3` is installed; verify `./` exists |
 | Invalid / corrupt dataset metadata | Skip dataset, log ID, continue with next candidate |
 | All datasets failed | Abort entirely; return "No suitable dataset found on data.gov.hk" with exploration log |
 | Unexpected API schema | Report exact mismatch; do not attempt to parse |
-| API endpoint returns error | Check if auth is required; if not, record a negative experience (`experience-log --kind negative`) |
+| API endpoint returns error | Check if auth is required; if not, note the failure and move on (don't write a program for a dead endpoint) |
 | Endpoint rejects the Python client | Retry with `curl` — some endpoints block non-browser clients; the CLI already sends a browser-like User-Agent, so copy that header into any ad-hoc fetch |
 
 **Stale data rule:** If the skill falls back to cached/local data, the output MUST include a visible warning:
@@ -201,36 +199,35 @@ export HKDATA_EMBED_MODEL=text-embedding-3-small
 export HKDATA_EMBED_URL=https://api.openai.com/v1/embeddings
 export HKDATA_EMBED_API_KEY=sk-...
 bash "$SKILL_DIR/hk.sh" catalog-embed                       # rebuild with the new provider
-bash "$SKILL_DIR/hk.sh" experience-embed
+bash "$SKILL_DIR/hk.sh" reindex
 bash "$SKILL_DIR/hk.sh" embed-status                        # confirm "match"
 ```
 
 The same flags exist per-command (`--provider`, `--model`, `--url`, `--api-key`),
 and `--provider` also accepts a dotted path `pkg.module:ClassName` to a custom
 backend. Each vector stores a **fingerprint** of its provider+model; switching
-providers changes the fingerprint, so `catalog-embed`/`experience-embed` re-embed
+providers changes the fingerprint, so `catalog-embed`/`reindex` re-embed
 everything instead of silently mixing incompatible embedding spaces, and
 `embed-status` reports a MISMATCH until you do.
 
 > **Different providers = different vector spaces.** A store built with Ollama must
 > be rebuilt from scratch (not searched) when you switch to an API provider.
 
-## Experience outcomes: `unavailable` vs `pitfall`
+## Negative outcomes: no dataset, or a dead path
 
-Two kinds of negative card (see Step 1 of [`SKILL.md`](../SKILL.md)):
+The two negative situations from the old experience store are now handled inline:
 
-| Outcome | Meaning | Step 1 behaviour |
-|---|---|---|
-| `unavailable` | The data is not published on data.gov.hk | Likely no data — **confirm with a quick `catalog-search` before answering "not available"** (optionally with a proxy); a near-miss card can rank for an unrelated query |
-| `pitfall` | This *path* is dead/retired, but the data may live elsewhere | Re-route via the card's `method`/`caveats`, then continue |
+- **`unavailable`** — the data is not published on data.gov.hk. Confirm with a
+  quick `catalog-search` before answering "not available" (optionally with a
+  proxy). Answer honestly; there is no program to write.
+- **`pitfall`** — this *path* is dead/retired but the data may live elsewhere.
+  Re-route (e.g. a retired endpoint to its successor) and record the re-route in
+  the program's `Quirks` section, or note it here under *Known Broken Endpoints*.
 
-Log `pitfall` only when there is a concrete re-route; otherwise `unavailable`.
-
-> **Step 1 is a ranked results page, not a verdict.** `experience-search` returns
-> the most relevant cards (paged, `--page`/`--per-page`), withholds cards below a
-> similarity floor, and prints `No relevant experience card found.` when nothing
-> is close. Apply the cards with judgement — never treat a single negative card as
-> proof that no dataset exists.
+> **A program is not a verdict.** `programs-search` returns the most relevant
+> functions; read them with judgement, and confirm against the live endpoint
+> before relying on them. An absence of programs is never proof that no dataset
+> exists — always fall through to `catalog-search`.
 
 ## Known Failure Patterns
 
@@ -240,8 +237,8 @@ Log `pitfall` only when there is a concrete re-route; otherwise `unavailable`.
 | `catalog-search` says "ChromaDB is not installed" | chromadb is missing from the venv | `.venv/bin/pip install -r requirements-vectors.txt`, then retry |
 | Chinese abbreviation (e.g. `康文署`) not found | Abbreviations are coined truncations; the full form (`康樂及文化事務署`) is in the tc metadata | Dense embeddings bridge it (cos ≈ 0.79) and `aliases.json` expands it deterministically — add a mapping if one is missing |
 | A dataset the CKAN API used to return is now missing | CKAN `package_search` was retired (Solr covered only ~631/3,822) | Use `catalog-search`, which covers the full catalog |
-| A `geodata.gov.hk` URL 404s or serves nothing | The geodata.gov.hk portal was retired | Re-route to the CSDI Portal `www.map.gov.hk/gs/api/...`; log a `pitfall` card |
-| Subagent fails to create reference file | Permission issue or wrong path | Verify references are written to `./references` |
+| A `geodata.gov.hk` URL 404s or serves nothing | The geodata.gov.hk portal was retired | Re-route to the CSDI Portal `www.map.gov.hk/gs/api/...`; note the re-route in the program's `Quirks` |
+| Subagent fails to write a program | Permission issue or wrong path | Verify programs are written under `./programs/<org>/` |
 | Agent tool syntax error | Legacy or over-split spawning | At most one subagent; use your agent tool's equivalent of a single coder subagent with shell access |
 
 When a new failure pattern is discovered, fix it, add a row here, and update the relevant step or checklist.

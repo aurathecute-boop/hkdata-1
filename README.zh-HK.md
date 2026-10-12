@@ -1,6 +1,6 @@
 # 港數通 · hkdata
 
-**香港政府開放數據 × AI Agent 技能** — 一個具備自我學習能力的數據發掘與查詢工具，
+**香港政府開放數據 × AI Agent 技能** — 一個具備自我擴展能力的數據發掘與查詢工具，
 面向 [DATA.GOV.HK](https://data.gov.hk)（資料一線通）開放數據。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -45,10 +45,11 @@ now?"* — 它會找出正確的官方 dataset、查詢即時 API，而且**當�
   以取得最新數據。
 - **如實作答** — 每個答案都會列明 dataset ID、endpoint，以及數據本身的香港時間戳；
   當確實沒有數據時，會回答「沒有」。
-- **具備記憶** — 每次發現都會儲存為正面／負面記憶卡，下一條類似問題便能立即回答。
+- **自我擴展** — 每個驗證過的食譜都會存成 `programs/` 內一個可執行的函數，
+  下一條類似問題即可直接呼叫它來回答。
 
 背後它會將 data.gov.hk 爬取一次，建立本地、已清除個人資料的 catalog，再以混合檢索
-（多語言稠密向量 + 關鍵字）進行搜尋：
+（多語言稠密向量 + 關鍵字）進行搜尋，同時維護一個**程式庫**：
 
 ```text
 catalog-sync --full --lang en,tc    爬取完整 catalog（可續傳）
@@ -58,32 +59,35 @@ data/catalog/*.jsonl                8 個 shard，每個 500 個 dataset，已�
         │
 catalog-embed                       以本地（或遠端）模型進行嵌入
         ▼
-.cache/catalog/chroma/              ChromaDB 資料庫（gitignored）
-   ├── hkdata_datasets              「有哪些 dataset 存在」
-   └── hkdata_experiences           「這條問題如何回答」  （正／負經驗）
+.cache/catalog/chroma/hkdata_datasets   「有哪些 dataset 存在」
+        ▲
+programs/*.py                       可執行的函數，按部門分組
+        │                            docstring = 檢索 + 閱讀介面
+reindex                             嵌入 docstring
+        ▼
+.cache/catalog/chroma/hkdata_programs   「這條問題如何回答」
 ```
 
-## 與其他工具最大的不同：它會學習
+## 與其他工具最大的不同：它靠寫程式來學習
 
-每次發現都會寫回成一張**記憶卡**（正面或負面），因此下一條類似問題無須重新搜尋，
-即可立即回答：
+你是一個**程式撰寫 agent**，不是搜尋精靈。當問題是全新的，你便探索
+（`catalog-search` → `info` → `test`）、寫一個函數、執行它以回答，然後 `reindex`
+—— 下次同類問題就只需一步查詢：
 
 ```text
-1. experience-search "長沙灣 健身室"               → 沒有記錄
-2. catalog-search   "gym room"                    → hk-lcsd-facility-facility-fit
-3. info + test 個 endpoint                         → 即時 JSON，87 間
-4. experience-log   --outcome located ...          → 寫入記憶
-5. experience-search "深水埗 fitness room"         → 在第 1 步即可回答 ✓
+1. programs-search "長沙灣 健身室"               → 沒有命中
+2. catalog-search   "gym room"                  → hk-lcsd-facility-facility-fit
+3. info + test 個 endpoint                       → 即時 JSON，87 間
+4. 寫 programs/lcsd/facility.py:fitness_rooms   → 執行它，回答
+5. reindex                                       → 函數已被索引
+6. programs-search "深水埗 fitness room"         → 在第 1 步即可回答 ✓
 ```
-
-過時的卡片帶有日期、可被取代；資料庫同時記錄**哪些可行**與**哪些是死路**，
-因此不會重複犯下相同的錯誤。
 
 | | 港數通 |
 |---|---|
 | **雙語** | 英文 + 繁體中文 metadata（`康文署` → `康樂及文化事務署`） |
 | **混合檢索** | ChromaDB 稠密向量融合關鍵字 + 簡稱對照 |
-| **自我學習** | 每次發現都記錄為正面／負面卡片 |
+| **自我擴展** | 每個新食譜都成為可執行、可索引的函數 |
 | **可插拔嵌入** | 預設本地 Ollama；亦可使用任何 OpenAI 相容 API（或自行撰寫 backend） |
 | **誠實合約** | 必須列明 dataset ID、endpoint，以及數據本身的香港時間戳 |
 | **謹守範圍** | 只處理香港政府數據——其餘一律轉交 |
@@ -96,9 +100,9 @@ python3 -m venv .venv
 ollama pull embeddinggemma-2:740m
 
 bash ./hk.sh catalog-embed                 # 約 10 分鐘（shard 已 committed，無須爬取）
-bash ./hk.sh experience-embed
-bash ./hk.sh catalog-search "badminton courts"
-bash ./hk.sh catalog-search "康文署羽毛球場"
+bash ./hk.sh reindex                       # 索引程式庫
+bash ./hk.sh programs-search "badminton courts"
+bash ./hk.sh programs-search "康文署羽毛球場"
 ```
 
 `data/catalog/` 的 shard 已經 committed，因此新 clone 下來**只需要建立向量庫**，
@@ -107,19 +111,17 @@ bash ./hk.sh catalog-search "康文署羽毛球場"
 ## 用法
 
 ```bash
-# 第 1 步 — 過往經驗（正面 + 負面）
-bash ./hk.sh experience-search "gym room Cheung Sha Wan"
+# Path A — 已有可執行的程式
+bash ./hk.sh programs-search "gym room Cheung Sha Wan"
+bash ./hk.sh programs-search "gym room Cheung Sha Wan" --source   # 列印原始碼以便執行
 
-# 第 2 步 — 完整 catalog
+# Path B — 探索，然後寫一個程式並 reindex
 bash ./hk.sh catalog-search "badminton courts"
-bash ./hk.sh catalog-search "康文署羽毛球場" --top-n 5
-
-# 查看 dataset + 測試 endpoint
 bash ./hk.sh info hk-lcsd-facility-facility-fit
 bash ./hk.sh test "http://www.lcsd.gov.hk/datagovhk/facility/facility-fitrm.json"
 
-# 精選已驗證 dataset + 覆蓋率 + 嵌入 backend
-bash ./hk.sh search-local "enrolment"
+# 維護
+bash ./hk.sh programs-status
 bash ./hk.sh catalog-status
 bash ./hk.sh embed-status
 ```
@@ -128,19 +130,16 @@ bash ./hk.sh embed-status
 
 | 命令 | 用途 |
 |---|---|
-| `experience-search "<query>"` | 過往經驗排名搜尋（可翻頁，正／負）— 第 1 步 |
-| `experience-log --kind positive\|negative …` | 記錄並索引經驗（第 5 步） |
-| `experience-embed` / `experience-migrate` | 建立／重建經驗索引 |
-| `catalog-search "<query>"` | 完整 catalog 混合檢索 — 第 2 步 |
+| `programs-search "<query>" [--source] [--json]` | 可執行函數的語意搜尋 — Path A |
+| `reindex` | 從 `programs/` 抽取並嵌入函數、重建登錄 |
+| `programs-status` | 程式檔案／函數數量 + 向量庫狀態 |
+| `catalog-search "<query>"` | 完整 catalog 混合檢索 — Path B |
 | `catalog-sync [--full] [--refresh] [--lang en,tc]` | 種子／爬取／更新離線 catalog |
-| `catalog-embed` | 建立 ChromaDB 向量庫 |
+| `catalog-embed` | 建立 ChromaDB catalog 向量庫 |
 | `catalog-status` | 覆蓋率 + 向量庫報告 |
-| `embed-status` | 現行嵌入 backend + 資料庫匹配情況 |
+| `embed-status` | 現行嵌入 backend + 資料庫匹配情況（catalog、programs） |
 | `info "<id>"` | Dataset metadata（`package_show`） |
 | `test "<url>"` | 測試 endpoint，自動偵測 JSON / XML / CSV |
-| `search-local "<query>"` | 搜尋精選參考文件 |
-| `reindex` | 由參考文件重建 `references/search-index.json` |
-| `log-search` / `log-render` | 查詢／重新產生失敗與策略記錄 |
 
 所有命令均經 `bash ./hk.sh` 執行，它會在需要 `chromadb` 時自動選用 `.venv`，
 否則使用普通 `python3` —— 你無須自行選擇。
@@ -155,21 +154,27 @@ export HKDATA_EMBED_PROVIDER=openai
 export HKDATA_EMBED_MODEL=text-embedding-3-small
 export HKDATA_EMBED_URL=https://api.openai.com/v1/embeddings
 export HKDATA_EMBED_API_KEY=sk-...
-bash ./hk.sh catalog-embed && bash ./hk.sh experience-embed
+bash ./hk.sh catalog-embed && bash ./hk.sh reindex
 ```
 
 介面用法請見 [SETUP.md](SETUP.md) *「Integrating a new backend」*。
+
+## 撰寫程式
+
+把 [`programs/_template.py`](programs/_template.py) 複製到正確的
+`programs/<部門>/` 子資料夾。一個程式就是一個函數，其 docstring 以**數據提供什麼**
+為首，並列明 dataset ID、endpoint、用法、示例問題與已知陷阱。函數回傳可 JSON
+序列化的資料、不 `print`。寫好後執行 `bash ./hk.sh reindex`。
 
 ## 目錄結構
 
 ```
 hk.sh                     單一 CLI 入口（自動選用 venv 或 python3）
-SKILL.md                  發掘流程（agent 入口）
+SKILL.md                  coding-agent 工作流程（agent 入口）
 AGENTS.md                 供 agent 使用的筆記
-scripts/hkdata/           CLI（catalog.py、vectors.py、embeddings.py、index.py …）
+programs/                 可執行、可索引的函數程式庫（一函數一能力）
+scripts/hkdata/           CLI + 引擎（catalog.py、vectors.py、programs.py …）
 data/catalog/             已清除個人資料的 catalog shard（committed）
-references/               精選 dataset 文件 + 登錄 + 簡稱對照
-logs/                     渲染視圖（failure log = 負面、strategy registry = 正面）
 tests/                    pytest 測試
 ```
 

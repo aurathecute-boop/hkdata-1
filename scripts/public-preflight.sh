@@ -20,8 +20,8 @@ warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
 # ---------------------------------------------------------------------------
 # Policy: which paths are private knowledge (never pushed) and which .md files
 # are method docs (always pushed). Keep in sync with .gitignore.
-PRIVATE_RE='^(data/experiences\.jsonl$|logs/|references/index\.md$|references/search-index\.json$|references/[^/]+\.md$)'
-KEEP_RE='^references/(template|category-mapping|workflow-guides)\.md$'
+PRIVATE_RE='^(logs/|references/[^/]+\.md$|programs/index\.md$)'
+KEEP_RE='^references/workflow-guides\.md$'
 SECRET_RE='(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY)'
 PERSONAL_RE='(/Users/[A-Za-z0-9._-]+|[A-Z]{1,2}[0-9]{6}\([0-9A]\)|\+852[ -]?[0-9]{4}[ -]?[0-9]{4})'
 EMAIL_RE='[A-Za-z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|icloud|yahoo|qq|163|126)\.[A-Za-z]{2,}'

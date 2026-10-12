@@ -72,24 +72,21 @@ experience counts.)
 
 ```bash
 bash ./hk.sh catalog-embed      # 3,822 datasets (~10 min)
-bash ./hk.sh experience-embed   # experiences are private; empty on a fresh clone (seconds)
+bash ./hk.sh reindex            # index the program library (fast)
 ```
 
 Both are incremental: re-running only re-embeds content that changed. Only the
-catalog shards in `data/catalog/` are committed, so no crawl is needed.
-`data/experiences.jsonl` is **private** (gitignored) and starts empty on a fresh
-clone — it grows as you use the skill. `experience-embed` on an empty store is a
-no-op that exits 0.
+catalog shards in `data/catalog/` and the `programs/*.py` library are committed,
+so no crawl is needed.
 
 **6. Validate the skill loop — 3 hard questions**
 
 Setup is complete only when the skill loop runs end-to-end. Drive each question
-below through all five steps of [`SKILL.md`](SKILL.md) — Step 1
-(`experience-search`) → Step 2 (`catalog-search`) → Step 3 (`info`) → Step 4
-(`test`) → Step 5 (`experience-log` + `log-render`) — and confirm a sourced
-answer, or an honest "no dataset". None has a recorded recipe, two need a
-cross-dataset join and live endpoints, so this also exercises Step 5's memory
-write.
+below through the two-path loop of [`SKILL.md`](SKILL.md) — Path A
+(`programs-search`) → Path B (`catalog-search` → `info` → `test` → write a
+program → `reindex`) — and confirm a sourced answer, or an honest "no dataset".
+None has a recorded program, two need a cross-dataset join and live endpoints, so
+this also exercises writing + indexing a new function.
 
 1. **Q6 — crime trend by district** (`security-` category; likely CSV/XLSX):
    *"Which district saw the largest year-on-year % increase in reported violent
@@ -104,13 +101,13 @@ write.
 Sanity-check the stores first:
 
 ```bash
-bash ./hk.sh embed-status     # active backend + match for both stores
+bash ./hk.sh embed-status     # active backend + match for catalog + programs
 ```
 
 A run is a PASS when, for each question, the answer cites the dataset ID, the
 endpoint queried, and the data's own HKT timestamp (or states clearly that no
-dataset exists), and Step 5 has recorded one experience card. Record anything
-that breaks — a dead endpoint, a missing file, an install error.
+dataset exists), and a Path-B question has written one program and run `reindex`.
+Record anything that breaks — a dead endpoint, a missing file, an install error.
 
 ---
 
@@ -154,7 +151,7 @@ export HKDATA_EMBED_MODEL=text-embedding-3-small
 export HKDATA_EMBED_URL=https://api.openai.com/v1/embeddings
 export HKDATA_EMBED_API_KEY=sk-...
 bash ./hk.sh catalog-embed      # rebuild the store with the new provider
-bash ./hk.sh experience-embed
+bash ./hk.sh reindex
 bash ./hk.sh embed-status       # should show "match" for both stores
 ```
 
@@ -202,9 +199,9 @@ class AcmeEmbedder(Embedder):
 register_embedder("acme", AcmeEmbedder)   # now --provider acme works
 ```
 
-The rest of the toolkit (`catalog-embed`, `catalog-search`, `experience-*`)
-only talks to the `Embedder` interface, never to a concrete provider, so a new
-backend drops in with no changes to the search layer.
+The rest of the toolkit (`catalog-embed`, `catalog-search`, `programs-search`,
+`reindex`) only talks to the `Embedder` interface, never to a concrete provider,
+so a new backend drops in with no changes to the search layer.
 
 ---
 
@@ -227,11 +224,10 @@ shared through the link.
 ## Publishing to a public remote (guard rails)
 
 This repo is meant to be **shareable as an engine**: `SKILL.md`, `scripts/`,
-`SETUP.md`, the three method docs under `references/`, and the pinned catalog
-shards. The knowledge you accumulate — `data/experiences.jsonl`, the
-`references/<dataset>.md` recipes, and `logs/` — is **private** and untracked
-(see `.gitignore`), as are the files `reindex` generates from them
-(`references/index.md`, `references/search-index.json`).
+`SETUP.md`, the `programs/*.py` function library, the workflow-guides method doc
+under `references/`, and the pinned catalog shards. The generated
+`programs/index.md` registry that `reindex` writes is untracked (see
+`.gitignore`).
 
 Install the pre-push gate once per clone:
 
