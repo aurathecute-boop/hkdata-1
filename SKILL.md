@@ -1,18 +1,15 @@
 ---
 name: hkdata
 description: >
-  Answer Hong Kong queries with accurate data from data.gov.hk official APIs:
-  transport, weather, population, finance, health, employment, commerce,
-  recreation, education, city services. Use when the user asks about HK
-  statistics, government datasets, transport schedules, weather, facilities or
-  demographics. Trigger phrases: "hkdata", "港數通", "港数通", "Hong Kong data",
-  "data.gov.hk", "HK statistics", "HK population", "HK weather",
-  "MTR/bus schedule", "HK public holidays", "badminton courts", "schools in HK".
+  Use when the user asks about Hong Kong government open data, statistics, or
+  datasets — e.g. transport, weather, population, employment, finance, health,
+  education, housing, crime, tourism, facilities, etc. — in English or Chinese.
+  Queries data.gov.hk and returns sourced, live answers, or an honest "no dataset".
 compatibility: Requires python3 + chromadb for search/embed (see SETUP.md); needs a reachable embedding backend — Ollama by default, or any backend via the Embedder interface (see SETUP.md "Integrating a new backend").
 license: MIT
 ---
 
-# 港數通 · hkdata — Hong Kong Open Data Query Tool
+# 港數通 · hkdata — Hong Kong Open Data Library
 
 **Scope: Hong Kong data.gov.hk datasets only.** General web search, non-HK data,
 or non-government sources are handled by the agent's native web search tools, not
@@ -115,8 +112,8 @@ Full CLI list (catalog build/refresh) in [`README.md`](README.md).
 ## Auto-fallback and no-dataset contract
 
 When `programs-search` and `catalog-search` both return nothing useful, web search
-`site:data.gov.hk <topic>`, then record the outcome as a negative note. If Path B
-reveals **no dataset answers the query**, your answer MUST:
+`site:data.gov.hk <topic>`. If Path B reveals **no dataset answers the query**,
+your answer MUST:
 
 1. State clearly: "No suitable dataset found on data.gov.hk"
 2. Include an exploration log listing each dataset examined and why it didn't fit
