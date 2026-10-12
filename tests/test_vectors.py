@@ -81,7 +81,7 @@ def test_build_document_english_only():
 
 def test_build_metadata_fields():
     digest = vectors.text_hash("x")
-    meta = vectors.build_metadata(RECORD, "qwen3-embedding:0.6b", digest)
+    meta = vectors.build_metadata(RECORD, vectors.DEFAULT_MODEL, digest)
     assert meta["name"] == RECORD["name"]
     assert meta["title_tc"] == "羽毛球場(戶外免費球場)"
     assert meta["org_tc"] == "康樂及文化事務署"
@@ -181,6 +181,31 @@ def test_build_vectors_removes_stale(paths):
                                    collection_name="t_stale", verbose=False)
     assert result["removed"] == 1
     assert result["total"] == 1
+
+
+def test_build_vectors_recreates_on_model_change(paths):
+    catalog.write_shards({RECORD["name"]: RECORD}, [RECORD["name"]], paths)
+    client = _ephemeral()
+
+    def embed_two(texts):
+        return [[1.0, 0.0] for _ in texts]
+
+    def embed_three(texts):
+        return [[1.0, 0.0, 0.0] for _ in texts]
+
+    vectors.build_vectors(paths, model="model-a", embed_fn=embed_two,
+                          client=client, collection_name="t_switch",
+                          verbose=False)
+    # A different fingerprint (and dimension) must recreate the collection,
+    # not fail on Chroma's fixed dimensionality.
+    result = vectors.build_vectors(paths, model="model-b", embed_fn=embed_three,
+                                   client=client, collection_name="t_switch",
+                                   verbose=False)
+    assert result["total"] == 1
+    assert result["embedded"] == 1
+    meta = vectors._collection(client, "t_switch").get(
+        include=["metadatas"])["metadatas"][0]
+    assert meta["model"] == "model-b"
 
 
 def test_hybrid_search_dense_and_keyword(paths):

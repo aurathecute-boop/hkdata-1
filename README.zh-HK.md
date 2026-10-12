@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![datasets](https://img.shields.io/badge/datasets-3%2C822-blueviolet.svg)](https://data.gov.hk)
-[![version](https://img.shields.io/badge/version-0.3.0-lightgrey.svg)](scripts/hkdata/__init__.py)
+[![version](https://img.shields.io/badge/version-0.4.0-lightgrey.svg)](scripts/hkdata/__init__.py)
 
 你可以問它 *「長沙灣有沒有政府健身室？」* 或者 *"what's the air quality right
 now?"* — 它會找出正確的官方 dataset、查詢即時 API，而且**當數據確實不存在時，
@@ -93,7 +93,7 @@ catalog-embed                       以本地（或遠端）模型進行嵌入
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-vectors.txt
-ollama pull qwen3-embedding:0.6b
+ollama pull embeddinggemma-2:740m
 
 bash ./hk.sh catalog-embed                 # 約 10 分鐘（shard 已 committed，無須爬取）
 bash ./hk.sh experience-embed
@@ -147,7 +147,7 @@ bash ./hk.sh embed-status
 
 ### 嵌入 backend
 
-預設為本地 Ollama（`qwen3-embedding:0.6b`）。可以改用任何 OpenAI 相容 API，
+預設為本地 Ollama（`embeddinggemma-2:740m`）。可以改用任何 OpenAI 相容 API，
 或者透過 `Embedder` 介面接入自己的 backend：
 
 ```bash

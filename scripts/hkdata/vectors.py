@@ -23,7 +23,7 @@ from .embeddings import (
     DEFAULT_OLLAMA_URL,
     EMBED_BATCH,
     EMBED_TIMEOUT,
-    QWEN_QUERY_INSTRUCTION,
+    GEMMA_QUERY_INSTRUCTION,
     registered_providers,
     resolve_embedder,
 )
@@ -31,9 +31,10 @@ from .embeddings import (
 COLLECTION_NAME = "hkdata_datasets"
 ALIASES_PATH = catalog.REFERENCES_DIR / "aliases.json"
 
-# Backward-compatible alias: qwen3's query-side instruction prefix. New code should
-# use the per-provider ``query_instruction`` from :func:`resolve_embedder` instead.
-QUERY_INSTRUCTION = QWEN_QUERY_INSTRUCTION
+# Backward-compatible default for direct (non-CLI) callers. The CLI always passes
+# the resolved embedder's own ``query_instruction``, so this only matters when
+# calling ``vector_search``/``hybrid_search`` without one.
+QUERY_INSTRUCTION = GEMMA_QUERY_INSTRUCTION
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +208,23 @@ def _collection(client, name: str):
         name=name, metadata={"hnsw:space": "cosine"})
 
 
+def reset_collection_if_stale(collection, client, name: str, model: str) -> bool:
+    """Drop + recreate ``collection`` when its stored vectors use another model.
+
+    Chroma fixes a collection's dimensionality on first insert, so switching to a
+    different embedding space (Qwen 1024d -> EmbeddingGemma 768d) would raise on
+    upsert. Recreating makes a model change a clean full re-embed. Returns ``True``
+    when the collection was recreated.
+    """
+    existing = collection.get(limit=1, include=["metadatas"])
+    metadatas = existing.get("metadatas") or []
+    stored = (metadatas[0] or {}).get("model") if metadatas else None
+    if collection.count() and stored and stored != model:
+        client.delete_collection(name)
+        return True
+    return False
+
+
 def build_vectors(paths: catalog.CatalogPaths, model: str = DEFAULT_MODEL,
                   url: str = DEFAULT_OLLAMA_URL, batch: int = EMBED_BATCH,
                   collection_name: str = COLLECTION_NAME,
@@ -223,6 +241,8 @@ def build_vectors(paths: catalog.CatalogPaths, model: str = DEFAULT_MODEL,
     if client is None:
         client = _client(paths)
     collection = _collection(client, collection_name)
+    if reset_collection_if_stale(collection, client, collection_name, model):
+        collection = _collection(client, collection_name)
 
     existing = collection.get(include=["metadatas"])
     known: Dict[str, Dict] = {

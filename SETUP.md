@@ -16,8 +16,10 @@ install the search dependencies and build the vector store — **no crawl requir
 | [Ollama](https://ollama.com) | serves the default embedding model (optional — any embedding API works) | `ollama --version` |
 | `chromadb` | search store | installed in step 2 |
 
-The default embedding model is **`qwen3-embedding:0.6b`** — multilingual (English +
-Chinese), 1024-dimensional, ~640 MB. To use a different embedding service, set
+The default embedding model is **`embeddinggemma-2:740m`** — multilingual (English
++ Chinese), 768-dimensional, ~1.3 GB. It is an *asymmetric* model, so queries get a
+`task: search result | query: ` prefix and documents a `title: none | text: `
+prefix (applied for you). To use a different embedding service, set
 `HKDATA_EMBED_PROVIDER` / `HKDATA_EMBED_MODEL` / `HKDATA_EMBED_URL` /
 `HKDATA_EMBED_API_KEY` (see *Using a different embedding provider* below).
 
@@ -41,7 +43,7 @@ python3 -m venv .venv
 
 ```bash
 ollama serve          # if the server is not already running
-ollama pull qwen3-embedding:0.6b
+ollama pull embeddinggemma-2:740m
 ```
 
 **4. Check the catalog is present**
@@ -141,7 +143,7 @@ embedding provider* below).
 
 ## Using a different embedding provider (optional)
 
-Ollama + `qwen3-embedding:0.6b` is the default, but any embedding service can be
+Ollama + `embeddinggemma-2:740m` is the default, but any embedding service can be
 plugged in. Two built-in backends ship with the skill — `ollama` (local) and
 `openai` (any OpenAI-compatible `/v1/embeddings` API) — and you can add your own
 without editing this repo (see *Integrating a new backend* below):
@@ -166,8 +168,10 @@ format, so OpenRouter, LM Studio, vLLM, etc. all work with no code changes.
 ### Integrating a new backend
 
 An embedding backend is anything that implements the `Embedder` interface —
-a class with an `embed(texts) -> list[vectors]` method plus `name`, `model`, and
-`query_instruction` attributes. Wire it up one of two ways:
+a class with an `embed(texts) -> list[vectors]` method plus `name`, `model`,
+`query_instruction`, and `document_instruction` attributes (the `Embedder` base
+class provides the `embed_documents()` helper that applies the document prefix).
+Wire it up one of two ways:
 
 **1. Dotted path (no repo changes).** Point `HKDATA_EMBED_PROVIDER` at a
 `pkg.module:ClassName` on the interpreter's import path:
@@ -183,7 +187,8 @@ from hkdata.embeddings import Embedder, register_embedder
 
 class AcmeEmbedder(Embedder):
     name = "acme"              # part of the fingerprint
-    query_instruction = ""     # "" if the model takes plain queries
+    query_instruction = ""     # prefix for queries ("" = plain)
+    document_instruction = ""  # prefix for documents ("" = raw)
 
     def __init__(self, model=None, url=None, api_key=""):
         self.model = model or "acme-default-model"
@@ -263,7 +268,7 @@ before the first push.
 | `Vector store: unavailable` | You are running with plain `python3`, which has no `chromadb`. Use `bash ./hk.sh catalog-status`. |
 | `Vector store: empty (run: catalog-embed)` | Normal on a fresh clone — build the store with `bash ./hk.sh catalog-embed`. |
 | `ChromaDB is not installed` | `.venv/bin/pip install -r requirements-vectors.txt` |
-| `Ollama embedding failed` | The Ollama server is not running (`ollama serve`) or the model is missing (`ollama pull qwen3-embedding:0.6b`). |
+| `Ollama embedding failed` | The Ollama server is not running (`ollama serve`) or the model is missing (`ollama pull embeddinggemma-2:740m`). |
 | `Vector store is empty` | Run `bash ./hk.sh catalog-embed`. |
 | `catalog-search` returns nothing useful | Confirm `catalog-status` shows `Vector store: 3822 datasets`; then try broader terms or add an abbreviation to `references/aliases.json`. |
 | Tests fail | `.venv/bin/pip install -r requirements-dev.txt` then `.venv/bin/python -m pytest tests/ -q` — the suite is stdlib-only and passes without Ollama. |

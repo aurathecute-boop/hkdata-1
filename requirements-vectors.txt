@@ -6,7 +6,7 @@
 # Setup:
 #   python3 -m venv .venv
 #   .venv/bin/pip install -r requirements-vectors.txt
-#   ollama pull qwen3-embedding:0.6b
+#   ollama pull embeddinggemma-2:740m
 #
 # Usage:
 #   .venv/bin/python ./scripts/hkdata.py catalog-embed

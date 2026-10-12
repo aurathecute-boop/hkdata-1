@@ -16,7 +16,24 @@ def test_default_resolves_to_ollama(clean_env):
     assert e.model == embeddings.DEFAULT_MODEL
     # Ollama fingerprint is the bare model name (backward compatible).
     assert e.fingerprint == embeddings.DEFAULT_MODEL
-    assert e.query_instruction == embeddings.QWEN_QUERY_INSTRUCTION
+    # EmbeddingGemma uses asymmetric task prompts on both sides.
+    assert e.query_instruction == embeddings.GEMMA_QUERY_INSTRUCTION
+    assert e.document_instruction == embeddings.GEMMA_DOCUMENT_INSTRUCTION
+
+
+def test_ollama_prompts_by_model_family(clean_env):
+    gemma = embeddings.resolve_embedder("ollama", "embeddinggemma-2:740m")
+    assert gemma.query_instruction == embeddings.GEMMA_QUERY_INSTRUCTION
+    assert gemma.document_instruction == embeddings.GEMMA_DOCUMENT_INSTRUCTION
+
+    # A Qwen model keeps its query-only prefix (no document prefix).
+    qwen = embeddings.resolve_embedder("ollama", "qwen3-embedding:0.6b")
+    assert qwen.query_instruction == embeddings.QWEN_QUERY_INSTRUCTION
+    assert qwen.document_instruction == ""
+
+    # Unknown Ollama models take plain text, matching Ollama's own behaviour.
+    other = embeddings.resolve_embedder("ollama", "nomic-embed-text")
+    assert other.query_instruction == "" and other.document_instruction == ""
 
 
 def test_openai_resolution(clean_env):
@@ -60,6 +77,35 @@ def test_embed_query_applies_instruction():
 
     Fake().embed_query("hello")
     assert seen == ["PREFIX hello"]
+
+
+def test_embed_documents_applies_document_instruction():
+    seen = []
+
+    class Fake(embeddings.Embedder):
+        name = "fake"
+        document_instruction = "DOC "
+
+        def embed(self, texts):
+            seen.extend(texts)
+            return [[0.0]] * len(texts)
+
+    Fake().embed_documents(["a", "b"])
+    assert seen == ["DOC a", "DOC b"]
+
+
+def test_embed_documents_without_instruction_is_raw():
+    seen = []
+
+    class Fake(embeddings.Embedder):
+        name = "fake"
+
+        def embed(self, texts):
+            seen.extend(texts)
+            return [[0.0]] * len(texts)
+
+    Fake().embed_documents(["a"])
+    assert seen == ["a"]
 
 
 def test_register_custom_embedder(clean_env):

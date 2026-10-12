@@ -200,6 +200,9 @@ def upsert_experiences(records: List[Dict],
     if client is None:
         client = vectors._client(paths or catalog.default_paths())
     collection = vectors._collection(client, collection_name)
+    if vectors.reset_collection_if_stale(collection, client, collection_name,
+                                         model):
+        collection = vectors._collection(client, collection_name)
     for start in range(0, len(records), batch):
         chunk = [normalize(r) for r in records[start:start + batch]]
         collection.upsert(
@@ -226,6 +229,9 @@ def embed_experiences(paths: Optional[catalog.CatalogPaths] = None,
     if client is None:
         client = vectors._client(paths or catalog.default_paths())
     collection = vectors._collection(client, collection_name)
+    if vectors.reset_collection_if_stale(collection, client, collection_name,
+                                         model):
+        collection = vectors._collection(client, collection_name)
 
     existing = collection.get(include=["metadatas"])
     known = {i: (m or {}) for i, m in zip(existing["ids"], existing["metadatas"])}

@@ -172,8 +172,8 @@ bash "$SKILL_DIR/hk.sh" catalog-sync --refresh              # re-fetch 14-day RS
 
 `catalog-search` fuses rankings from ChromaDB with Reciprocal Rank Fusion:
 
-1. **Dense pass** — local Ollama embeddings (`qwen3-embedding:0.6b`, multilingual,
-   1024-dim) over the en + tc document text.
+1. **Dense pass** — local Ollama embeddings (`embeddinggemma-2:740m`, multilingual,
+   768-dim) over the en + tc document text.
 2. **Keyword pass** — the *same* dense query, restricted per token by a
    case-insensitive `$regex` `where_document` filter. Chroma has no ranked BM25,
    so this narrows candidates to ones containing the token while the dense
@@ -189,7 +189,7 @@ datasets; aliases and fusion changes need no re-embedding.
 
 ## Embedding backend (pluggable)
 
-Embeddings default to local Ollama (`qwen3-embedding:0.6b`) but any embedding
+Embeddings default to local Ollama (`embeddinggemma-2:740m`) but any embedding
 service can be plugged in. Two backends ship built-in — `ollama` and `openai`
 (any OpenAI-compatible `/v1/embeddings` API) — and custom backends drop in
 through the `Embedder` interface (see [`SETUP.md`](../SETUP.md) *Integrating a new

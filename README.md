@@ -8,7 +8,7 @@ toolkit for [DATA.GOV.HK](https://data.gov.hk) open data.
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![datasets](https://img.shields.io/badge/datasets-3%2C822-blueviolet.svg)](https://data.gov.hk)
-[![version](https://img.shields.io/badge/version-0.3.0-lightgrey.svg)](scripts/hkdata/__init__.py)
+[![version](https://img.shields.io/badge/version-0.4.0-lightgrey.svg)](scripts/hkdata/__init__.py)
 
 Ask it questions like *「長沙灣有冇政府健身室？」* or *"what's the air quality
 right now?"* and it finds the right official dataset, queries its live API, and
@@ -97,7 +97,7 @@ and *what's a dead end*, so it stops repeating past failures.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-vectors.txt
-ollama pull qwen3-embedding:0.6b
+ollama pull embeddinggemma-2:740m
 
 bash ./hk.sh catalog-embed                 # ~10 min (shards are committed, no crawl)
 bash ./hk.sh experience-embed
@@ -152,7 +152,7 @@ otherwise — no need to choose.
 
 ### Embedding backends
 
-Local Ollama (`qwen3-embedding:0.6b`) is the default. Switch to any
+Local Ollama (`embeddinggemma-2:740m`) is the default. Switch to any
 OpenAI-compatible API, or bring your own backend via the `Embedder` interface:
 
 ```bash

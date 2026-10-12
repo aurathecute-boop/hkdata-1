@@ -183,7 +183,7 @@ def cmd_catalog_embed(args: argparse.Namespace) -> int:
     embedder = _resolve_embedder(args)
     try:
         result = vectors.build_vectors(
-            paths, model=embedder.fingerprint, embed_fn=embedder.embed,
+            paths, model=embedder.fingerprint, embed_fn=embedder.embed_documents,
             batch=args.batch)
     except RuntimeError as exc:
         _eprint(f"Error: {exc}")
@@ -291,7 +291,7 @@ def cmd_experience_log(args: argparse.Namespace) -> int:
     embedder = _resolve_embedder(args)
     try:
         record = experience.append_experience(
-            exp, model=embedder.fingerprint, embed_fn=embedder.embed,
+            exp, model=embedder.fingerprint, embed_fn=embedder.embed_documents,
             upsert=upsert)
     except RuntimeError as exc:
         _eprint(f"Error: {exc}")
@@ -309,7 +309,7 @@ def cmd_experience_embed(args: argparse.Namespace) -> int:
     embedder = _resolve_embedder(args)
     try:
         result = experience.embed_experiences(
-            model=embedder.fingerprint, embed_fn=embedder.embed,
+            model=embedder.fingerprint, embed_fn=embedder.embed_documents,
             batch=args.batch)
     except RuntimeError as exc:
         _eprint(f"Error: {exc}")

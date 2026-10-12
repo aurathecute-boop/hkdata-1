@@ -27,7 +27,7 @@ Under the hood this is `"$PWD/.venv/bin/python" ./scripts/hkdata.py <subcommand>
 (or `python3 ./scripts/hkdata.py <subcommand>` when no venv exists).
 
 Core dependency for the catalog is `python3` (stdlib) for crawling, but **search
-requires the venv**: `chromadb` + a local Ollama model (`qwen3-embedding:0.6b`).
+requires the venv**: `chromadb` + a local Ollama model (`embeddinggemma-2:740m`).
 There is no SQLite/FTS5 fallback and no CKAN search anymore — the CKAN
 `package_search` API has been retired from this skill.
 

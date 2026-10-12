@@ -46,12 +46,18 @@ import os
 import time
 import urllib.error
 import urllib.request
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from .common import USER_AGENT
 
 EMBED_BATCH = 32
 EMBED_TIMEOUT = 120
+
+# EmbeddingGemma models are trained with **asymmetric** task prompts: a query
+# prefix on the search side and a document prefix on the corpus side. Ollama does
+# not inject these itself, so we prepend them (see ``OllamaEmbedder``).
+GEMMA_QUERY_INSTRUCTION = "task: search result | query: "
+GEMMA_DOCUMENT_INSTRUCTION = "title: none | text: "
 
 # Qwen3-Embedding is trained with an instruction prefix on the query side only.
 QWEN_QUERY_INSTRUCTION = (
@@ -59,7 +65,7 @@ QWEN_QUERY_INSTRUCTION = (
     "Query: "
 )
 
-DEFAULT_MODEL = "qwen3-embedding:0.6b"
+DEFAULT_MODEL = "embeddinggemma-2:740m"
 DEFAULT_OLLAMA_URL = "http://localhost:11434/api/embed"
 DEFAULT_OPENAI_MODEL = "text-embedding-3-small"
 DEFAULT_OPENAI_URL = "https://api.openai.com/v1/embeddings"
@@ -69,14 +75,16 @@ class Embedder:
     """Interface every embedding backend implements.
 
     Attributes:
-        ``name``               short backend id (part of the fingerprint)
-        ``model``              model identifier (part of the fingerprint)
-        ``query_instruction``  prefix applied to **queries only**; ``""`` when
-                               the model takes plain queries (documents are
-                               always embedded raw)
+        ``name``                  short backend id (part of the fingerprint)
+        ``model``                 model identifier (part of the fingerprint)
+        ``query_instruction``     prefix applied to **queries only**; ``""`` when
+                                  the model takes plain queries
+        ``document_instruction``  prefix applied to **documents** at index time;
+                                  ``""`` when the model takes raw documents
 
     Methods:
-        ``embed(texts)`` -> one vector per text. The only required method.
+        ``embed(texts)``           raw pass-through — the only required method.
+        ``embed_documents(texts)`` prepends ``document_instruction``, then embeds.
 
     ``fingerprint`` identifies the embedding space (``name:model``). It is stored
     on every vector, so switching backend/model is detected and triggers a full
@@ -86,6 +94,7 @@ class Embedder:
     name = ""
     model = ""
     query_instruction = ""
+    document_instruction = ""
 
     def embed(self, texts: List[str]) -> List[List[float]]:
         raise NotImplementedError
@@ -101,6 +110,26 @@ class Embedder:
     def embed_query(self, query: str) -> List[float]:
         return self.embed([self.query_instruction + query])[0]
 
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed corpus documents, applying the model's document prefix."""
+        if not self.document_instruction:
+            return self.embed(texts)
+        return self.embed([self.document_instruction + t for t in texts])
+
+
+def ollama_prompts(model: str) -> Tuple[str, str]:
+    """Return ``(query_instruction, document_instruction)`` for an Ollama model.
+
+    Only known families get prompts; anything else takes plain text, matching
+    Ollama's default (it does not add task prefixes itself).
+    """
+    name = (model or "").lower()
+    if name.startswith("embeddinggemma"):
+        return GEMMA_QUERY_INSTRUCTION, GEMMA_DOCUMENT_INSTRUCTION
+    if name.startswith("qwen3-embedding"):
+        return QWEN_QUERY_INSTRUCTION, ""
+    return "", ""
+
 
 # ---------------------------------------------------------------------------
 # Built-in backends
@@ -109,12 +138,13 @@ class Embedder:
 
 class OllamaEmbedder(Embedder):
     name = "ollama"
-    query_instruction = QWEN_QUERY_INSTRUCTION
 
     def __init__(self, model: Optional[str] = None,
                  url: Optional[str] = None, api_key: str = ""):
         self.model = model or DEFAULT_MODEL
         self.url = url or DEFAULT_OLLAMA_URL
+        self.query_instruction, self.document_instruction = ollama_prompts(
+            self.model)
 
     def embed(self, texts: List[str]) -> List[List[float]]:
         return _ollama_embed(texts, self.model, self.url)
