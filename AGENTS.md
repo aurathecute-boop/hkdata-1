@@ -77,8 +77,11 @@ first, then write the function from what you observed.
 Program files are grouped by **department/org**, not by the data.gov.hk category.
 Use short slugs (`lcsd/`, `td/`, `hko/`, `epd/`, `gpa/`, `housing/`, `censtatd/`, …).
 A function that joins two departments lives under its **primary** org and declares
-**all** dataset IDs it touches in `Datasets:`. The complex transport multi-endpoint
-joins (KMB route-finder, ferry+vessel, film-fund ROI) are deliberately deferred.
+**all** dataset IDs it touches in `Datasets:`. The remaining complex multi-endpoint
+joins are deliberately deferred: KMB A→B route-finder (terminus-match +
+`route-stop` → `stop` resolution — the raw `kmb_routes`/`kmb_stop`/`kmb_eta`
+endpoints are done), ferry timetable + live ETA, and MTR real-time (needs MTR's own
+API/spec/key, not a data.gov.hk endpoint).
 
 ## Scope boundary
 
@@ -110,7 +113,7 @@ carrying only the engine + `programs/*.py` is exactly what the test checks.
    - **not** use `SKILL.md`'s root-resolution snippet — the `~/.agents/skills/hkdata` symlink points at the private repo and would silently contaminate the run. Set `export HKDATA_SKILL_DIR=$PWD` inside the clone and run `bash ./hk.sh …`;
    - follow `SETUP.md` steps 1–5, then `SETUP.md` §6 — the 3 hard questions through the **full** two-path loop (Path A → Path B, one written program + `reindex` each);
    - write raw commands + output to `e2e-test/REPORT.md` with a verdict and a per-finding PASS/FAIL table.
-3. Expect ~64 tracked files and a green `bash ./hk.sh`-driven run; the suite needs `requirements-dev.txt`. No BLOCKER = pass.
+3. Expect ~84 tracked files and a green `bash ./hk.sh`-driven run; the suite needs `requirements-dev.txt`. No BLOCKER = pass.
 
 ## Keeping SKILL.md minimal
 
@@ -120,7 +123,7 @@ added, and it must not carry development, setup, or maintenance material:
 
 | Content | Belongs in |
 |---|---|
-| Two-path workflow, program docstring contract, answer contract | `SKILL.md` |
+| Two-path workflow, reusable-program composition, docstring contract, answer contract | `SKILL.md` |
 | First-run install, venv, Ollama, building/refreshing the stores | `SETUP.md` |
 | CLI reference, architecture, attribution | `README.md` |
 | Repo upkeep, conventions, gotchas for maintainers | `AGENTS.md` |
@@ -128,7 +131,7 @@ added, and it must not carry development, setup, or maintenance material:
 
 The program library lives in `programs/`; its generated registry is
 `programs/index.md` (built by `reindex`). The old `references/<dataset>.md` recipes
-are being migrated into `programs/` and will be removed.
+were migrated into `programs/` and removed.
 
 ## Weekly self-evolution review (every 7 days)
 
