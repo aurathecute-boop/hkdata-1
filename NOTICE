@@ -1,0 +1,11 @@
+Note on data
+============
+
+The catalog shards in `data/catalog/` and the reference documents in
+`references/` describe datasets published on DATA.GOV.HK by Hong Kong
+Government bureaux and departments. That data remains subject to the
+DATA.GOV.HK terms of use (https://data.gov.hk/en/terms-and-conditions) and is
+included here for discovery/attribution purposes.
+
+The MIT licence in `LICENSE` covers this skill's own code and documentation
+only, not the underlying government data.
