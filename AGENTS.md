@@ -103,17 +103,30 @@ then `SKILL.md` from a fresh clone. Run it before a release or after large
 changes. The generated `programs/index.md` registry is gitignored; a clone
 carrying only the engine + `programs/*.py` is exactly what the test checks.
 
-1. `e2e-test/` is gitignored. Clean it and clone the **public remote** (not a local copy):
+> **The clone MUST live outside the skill root.** The agent runtime discovers
+> skills by globbing `{*.md,**/SKILL.md}` **recursively** under every skill
+> root (and it follows symlinks), then keeps them in a map keyed by the
+> *parent directory's name* — last file wins. A clone inside this repo puts a
+> second `SKILL.md` whose parent dir is also `hkdata` under `~/.agents/skills/`,
+> and the stale clone silently replaces the real skill. `tests/test_skill_layout.py`
+> fails the build if that ever happens again.
+
+1. Clean the workspace and clone the **remote** (not a local copy) —
+   **outside** this repo, e.g. `~/Projects/agents/hkdata-e2e/`. The remote is
+   private, so clone it with `gh` (authenticated):
    ```bash
-   rm -rf e2e-test/hkdata && mkdir -p e2e-test
-   git clone https://github.com/gnokit/hkdata.git e2e-test/hkdata
+   E2E_DIR="${HKDATA_E2E_DIR:-$HOME/Projects/agents/hkdata-e2e}"
+   rm -rf "$E2E_DIR" && mkdir -p "$E2E_DIR"
+   gh repo clone gnokit/hkdata "$E2E_DIR/hkdata"
    ```
 2. Spawn **one** high-reasoning subagent (shell + file access). It must:
-   - work only inside `e2e-test/hkdata`; never read/write the working repo or `~/.agents/skills/hkdata`;
+   - work only inside `$E2E_DIR/hkdata`; never read/write the working repo or `~/.agents/skills/hkdata`;
    - **not** use `SKILL.md`'s root-resolution snippet — the `~/.agents/skills/hkdata` symlink points at the private repo and would silently contaminate the run. Set `export HKDATA_SKILL_DIR=$PWD` inside the clone and run `bash ./hk.sh …`;
    - follow `SETUP.md` steps 1–5, then `SETUP.md` §6 — the 3 hard questions through the **full** two-path loop (Path A → Path B, one written program + `reindex` each);
-   - write raw commands + output to `e2e-test/REPORT.md` with a verdict and a per-finding PASS/FAIL table.
+   - write raw commands + output to `$E2E_DIR/REPORT.md` with a verdict and a per-finding PASS/FAIL table.
 3. Expect ~84 tracked files and a green `bash ./hk.sh`-driven run; the suite needs `requirements-dev.txt`. No BLOCKER = pass.
+4. **Clean up afterwards** — `rm -rf "$E2E_DIR"`. A leftover clone is a live
+   hijack risk the moment the skill is installed by symlink.
 
 ## Keeping SKILL.md minimal
 

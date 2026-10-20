@@ -15,6 +15,22 @@ license: MIT
 or non-government sources are handled by the agent's native web search tools, not
 this skill.
 
+## Resolve the skill root once
+
+The commands below use `$SKILL_DIR`; resolve it before the first call (the docs
+never assume a runtime's install directory):
+
+```bash
+: "${SKILL_DIR:=$(for d in "${HKDATA_SKILL_DIR:-}" "$HOME/.agents/skills/hkdata" \
+    "$PWD/.agents/skills/hkdata" "$HOME/.claude/skills/hkdata" \
+    "$HOME/.config/agents/skills/hkdata" "$PWD"; do [ -f "$d/hk.sh" ] && { echo "$d"; break; }; done)}"
+[ -n "$SKILL_DIR" ] || { echo "hkdata: set HKDATA_SKILL_DIR to the dir containing hk.sh" >&2; exit 1; }
+```
+
+The wrapper is cwd-safe (it resolves its own root) and picks the venv
+interpreter when present, else `python3`. From the skill directory itself,
+`bash ./hk.sh <subcommand> …` works the same way.
+
 ## You are a coding agent with a library of reusable programs
 
 This skill gives you a growing library of **runnable, docstring-documented

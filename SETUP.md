@@ -219,9 +219,23 @@ All commands resolve their own root, so from any other codebase call
 Nothing else differs: the committed shards and the rebuilt `.cache/` store are
 shared through the link.
 
+> **Keep the linked tree free of a second `hkdata/SKILL.md`.** The agent
+> runtime discovers skills by globbing `{*.md,**/SKILL.md}` **recursively**
+> under each skill root (it follows symlinks) and keys them by the *parent
+> directory's name* — the last file scanned wins. A clone, a fixture, or a
+> vendored package that ships its own `hkdata/SKILL.md` therefore silently
+> replaces this skill with a stale copy. `tests/test_skill_layout.py` fails if
+> that ever happens; the end-to-end test clones **outside** the repo for the
+> same reason (see `AGENTS.md`).
+
 ---
 
-## Publishing to a public remote (guard rails)
+## Remote hygiene (guard rails)
+
+> The remote `github.com/gnokit/hkdata` is **private**. Clone it with
+> `gh repo clone gnokit/hkdata <dir>` (authenticated); a plain `git clone` of the
+> HTTPS URL fails without credentials. Visibility can change again, so the
+> pre-push gate below still runs.
 
 This repo is meant to be **shareable as an engine**: `SKILL.md`, `scripts/`,
 `SETUP.md`, the `programs/*.py` function library, the workflow-guides method doc
