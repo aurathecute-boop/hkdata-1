@@ -172,9 +172,13 @@ def catalogue_holdings(record) -> list:
           copies, different call numbers, e.g. JF ROW and YF ROW)
         - 館內架上 = borrowable now; 館外備用書庫N = in the reserve store, ask at
           the desk; 閉架 = closed stack (mobile libraries); 請向館員索閱 = ask
-          staff; 到期日 <date> = on loan until that date
+          staff; 待上架 = awaiting shelving; 到期日 <date> = on loan until
+          that date; 轉移中 = in transit
         - mobile libraries (流動圖書館) and the reserve store hold copies that
           are not walk-up borrowable
+        - the record page occasionally returns without its holdings table; the
+          function retries three times and returns whatever it got, so an
+          empty result means "no holdings parsed", not necessarily "no copy"
     """
     import urllib.request
 
@@ -182,10 +186,24 @@ def catalogue_holdings(record) -> list:
     if "id=" in str(record):
         rid = str(record).split("id=")[1].split("&")[0]
     url = _BASE_ITEM.format(rid=rid)
-    req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        page = resp.read().decode("utf-8", "replace")
-    return _parse_holdings(page)
+    rows = []
+    for attempt in range(3):
+        req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                page = resp.read().decode("utf-8", "replace")
+        except Exception:
+            page = ""
+        rows = _parse_holdings(page)
+        if rows:
+            return rows
+        # the record page occasionally comes back without its holdings table;
+        # retry rather than reporting a branch count that is too low
+        if attempt < 2:
+            import time
+
+            time.sleep(0.5 * (attempt + 1))
+    return rows
 
 
 def catalogue_availability(term, field="", with_holdings=False,
