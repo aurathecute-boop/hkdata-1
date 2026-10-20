@@ -17,23 +17,21 @@ def _search_url(term, field="", fmt="book"):
             f"&facet_format={fmt}&syndication=true&theme=WEB")
 
 
-def _parse_items(xml):
-    import html
-    import re
+def _parse_items(feed):
+    """RSS items → dicts (feedparser handles the XML quirks)."""
+    import feedparser
+    import urllib.parse
 
     out = []
-    for item in re.findall(r"<item>(.*?)</item>", xml, re.S):
-        def tag(name):
-            found = re.search(rf"<{name}>(.*?)</{name}>", item, re.S)
-            return html.unescape(found.group(1)).strip() if found else ""
-        link = tag("link")
+    for item in feedparser.parse(feed).entries:
+        link = (item.get("link") or "").strip()
         rid = ""
-        found = re.search(r"id=([^&]+)", link)
-        if found:
-            rid = found.group(1)
+        if link:
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
+            rid = (params.get("id") or [""])[0]
         out.append({
-            "title": tag("title"),
-            "author": tag("description"),
+            "title": (item.get("title") or "").strip(),
+            "author": (item.get("description") or "").strip(),
             "record_id": rid,
             "url": link,
         })
@@ -41,26 +39,31 @@ def _parse_items(xml):
 
 
 def _parse_holdings(page):
-    import html
-    import re
+    """HTML record page → one dict per copy (first table with 6+ cells)."""
+    from lxml import html as lxml_html
 
-    body = re.search(r"<tbody>(.*?)</tbody>", page, re.S)
-    if not body:
+    try:
+        doc = lxml_html.fromstring(page)
+    except Exception:
         return []
-    rows = []
-    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", body.group(1), re.S):
-        cells = [re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", c))).strip()
-                 for c in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)]
-        if len(cells) >= 6 and cells[0]:
-            rows.append({
-                "library": cells[0],
-                "call_number": cells[1],
-                "volume": cells[2],
-                "media_code": cells[3],
-                "status": cells[4],
-                "collection": cells[5],
-            })
-    return rows
+    for table in doc.xpath("//table"):
+        trs = table.xpath(".//tbody/tr") or table.xpath(".//tr[td]")
+        rows = []
+        for tr in trs:
+            cells = [" ".join(td.text_content().split())
+                     for td in tr.xpath("./td")]
+            if len(cells) >= 6 and cells[0]:
+                rows.append({
+                    "library": cells[0],
+                    "call_number": cells[1],
+                    "volume": cells[2],
+                    "media_code": cells[3],
+                    "status": cells[4],
+                    "collection": cells[5],
+                })
+        if rows:
+            return rows
+    return []
 
 
 def catalogue_search(term, field="", limit=5, with_holdings=False) -> list:
@@ -124,12 +127,12 @@ def catalogue_search(term, field="", limit=5, with_holdings=False) -> list:
         ``<tbody>`` table of the 館藏項目 tab
         - search hits carry no date; holdings carry the live loan status
     """
-    import urllib.request
+    import requests
 
     url = _search_url(term, field=field)
-    req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        rows = _parse_items(resp.read().decode("utf-8", "replace"))
+    resp = requests.get(url, headers={"User-Agent": "curl/8.0"}, timeout=30)
+    resp.raise_for_status()
+    rows = _parse_items(resp.content)
     if limit:
         rows = rows[:limit]
     if with_holdings:
@@ -182,7 +185,7 @@ def catalogue_holdings(record) -> list:
           function retries three times and returns whatever it got, so an
           empty result means "no holdings parsed", not necessarily "no copy"
     """
-    import urllib.request
+    import requests
 
     rid = record
     if "id=" in str(record):
@@ -190,10 +193,10 @@ def catalogue_holdings(record) -> list:
     url = _BASE_ITEM.format(rid=rid)
     rows = []
     for attempt in range(3):
-        req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                page = resp.read().decode("utf-8", "replace")
+            resp = requests.get(url, headers={"User-Agent": "curl/8.0"},
+                                timeout=30)
+            page = resp.text
         except Exception:
             page = ""
         rows = _parse_holdings(page)

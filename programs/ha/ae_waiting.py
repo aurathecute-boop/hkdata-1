@@ -55,17 +55,18 @@ def ae_waiting_time(hospitals=None, with_district=True) -> list:
         - the 18 rows are the HA hospitals with an A&E department; hospitals
           such as 葵涌急症科醫院 and 聖德肋撒醫院 are not in this feed
     """
-    import json
     import math
     import urllib.parse
-    import urllib.request
+
+    import requests
 
     def get_json(url, headers=None):
-        req = urllib.request.Request(
-            url, headers=headers or {"User-Agent": "Mozilla/5.0 (Macintosh; "
-                                                     "Intel Mac OS X 10_15_7)"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        merged = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X "
+                                "10_15_7)"}
+        merged.update(headers or {})
+        resp = requests.get(url, headers=merged, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
 
     def to_minutes(text):
         if not text:

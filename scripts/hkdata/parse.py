@@ -319,10 +319,15 @@ def parse_data(
     fmt = detect_format(data, content_type=content_type, url=url)
 
     if fmt in _BINARY_FORMATS:
+        note = ("Binary resource (archive/document) — download and parse it "
+                "locally; it is not a text/JSON/CSV endpoint.")
+        if fmt in ("xlsx", "xls"):
+            note += (" Spreadsheets: use the program library — "
+                     "xlsx_preview(url) to find the header row, then "
+                     "xlsx_rows(url, header=n).")
         return {
             "format": fmt,
-            "note": "Binary resource (archive/document) — download and parse it "
-                    "locally; it is not a text/JSON/CSV endpoint.",
+            "note": note,
             "bytes": len(data),
         }
 

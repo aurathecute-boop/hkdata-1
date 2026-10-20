@@ -153,9 +153,8 @@ def new_arrivals(collection="adult_books", language="chi", limit=None) -> list:
           served in ``dateNewest`` order, so the dates are *not* monotonic
           within a feed
     """
-    import urllib.parse
-    import urllib.request
-    import xml.etree.ElementTree as ET
+    import feedparser
+    import requests
     from datetime import datetime, timedelta, timezone
 
     if collection not in _COLLECTIONS:
@@ -169,29 +168,23 @@ def new_arrivals(collection="adult_books", language="chi", limit=None) -> list:
 
     query = _COLLECTIONS[collection][language]
     url = f"{_BASE}{query}&sort=dateNewest&syndication=true&theme=WEB"
-    req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        root = ET.fromstring(resp.read().decode("utf-8"))
+    resp = requests.get(url, headers={"User-Agent": "curl/8.0"}, timeout=30)
+    resp.raise_for_status()
+    feed = feedparser.parse(resp.content)
 
     hkt = timezone(timedelta(hours=8))
     rows = []
-    for item in root.iter("item"):
-        title = (item.findtext("title") or "").strip()
-        author = (item.findtext("description") or "").strip()
-        link = (item.findtext("link") or "").strip()
-        pub = (item.findtext("pubDate") or "").strip()
+    for item in feed.entries:
+        pub = (item.get("published") or item.get("updated") or "").strip()
+        parsed = item.get("published_parsed") or item.get("updated_parsed")
         added = None
-        if pub:
-            try:
-                stamp = datetime.strptime(pub, "%a, %d %b %Y %H:%M:%S %Z")
-                stamp = stamp.replace(tzinfo=timezone.utc)
-                added = stamp.astimezone(hkt).isoformat()
-            except ValueError:
-                added = None
+        if parsed:
+            stamp = datetime(*parsed[:6], tzinfo=timezone.utc)
+            added = stamp.astimezone(hkt).isoformat()
         rows.append({
-            "title": title,
-            "author": author,
-            "link": link,
+            "title": (item.get("title") or "").strip(),
+            "author": (item.get("description") or "").strip(),
+            "link": (item.get("link") or "").strip(),
             "date_added": added,
             "pub_date": pub,
             "collection": collection,
