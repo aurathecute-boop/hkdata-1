@@ -19,10 +19,12 @@ Fields
 ------
 :Provides:    what fields/tables the data returns (units, example values)
 :Coverage:    geography + temporality (real-time / historical / static)
-:Datasets:    data.gov.hk dataset ID(s)
+:Datasets:    data.gov.hk dataset ID(s) — or ``none`` when the data comes
+              from a department's own web app instead of an open dataset
+              (then say so: "none — scraped from <dept> web app")
 :Department:  source department/org
 :Endpoint:    endpoint URL(s)
-:Format:      JSON / XML / CSV
+:Format:      JSON / XML / CSV / RSS / HTML (scraped)
 :Usage:       a doctest-style example of calling it and the shape of the result
 :Questions:   natural-language questions this answers
 :Quirks:      encoding / auth / direction / join-key gotchas

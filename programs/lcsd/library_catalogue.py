@@ -82,10 +82,10 @@ def catalogue_search(term, field="", limit=5, with_holdings=False) -> list:
         - Time:      live catalogue; loan statuses reflect the moment of the
           call
 
-    Datasets:   hk-lcsd-lib-lib-newadd (sibling API — the dataset's own
-                resources use the same WebCat syndication endpoint; the
-                catalogue search and holdings endpoints are not themselves a
-                data.gov.hk resource)
+    Datasets:   none for the search — the syndication endpoint below is the
+                one published by hk-lcsd-lib-lib-newadd, but that dataset only
+                publishes fixed facet queries; searching by title/author uses
+                the catalogue's own (undocumented) query parameters
     Department: Leisure and Cultural Services Department
                 (Hong Kong Public Libraries)
     Endpoint:   https://webcat.hkpl.gov.hk/search/syndication
@@ -151,11 +151,13 @@ def catalogue_holdings(record) -> list:
         - Geography: the branches that hold the copy
         - Time:      live — a due date means the copy is on loan until then
 
-    Datasets:   hk-lcsd-lib-lib-newadd (sibling API — see the search function)
+    Datasets:   none — **scraped** from the public catalogue record page.
+                There is no data.gov.hk dataset for per-branch holdings or
+                loan status; this is the department's own web app
     Department: Leisure and Cultural Services Department
                 (Hong Kong Public Libraries)
     Endpoint:   https://webcat.hkpl.gov.hk/lib/item?id=chamo:<n>&theme=WEB
-    Format:     HTML
+    Format:     HTML (parsed from the 館藏項目 table)
 
     Usage:
         >>> catalogue_holdings("chamo:3377318")
@@ -222,12 +224,15 @@ def catalogue_availability(term, field="", with_holdings=False,
         - Geography: all HKPL branches
         - Time:      live loan status at the moment of the call
 
-    Datasets:   hk-lcsd-lib-lib-newadd (sibling API — see the search function)
+    Datasets:   none — the branch availability is **scraped** from the
+                catalogue record page (no open dataset for holdings); the
+                search endpoint is the one published by hk-lcsd-lib-lib-newadd
+                but with the catalogue's own undocumented query parameters
     Department: Leisure and Cultural Services Department
                 (Hong Kong Public Libraries)
     Endpoint:   https://webcat.hkpl.gov.hk/search/syndication
                 https://webcat.hkpl.gov.hk/lib/item?id=chamo:<n>&theme=WEB
-    Format:     RSS + HTML
+    Format:     RSS (search) + HTML (holdings, scraped)
 
     Usage:
         >>> a = catalogue_availability("harry potter and the goblet of fire",

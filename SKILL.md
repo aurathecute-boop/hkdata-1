@@ -143,11 +143,22 @@ your answer MUST:
 2. Include an exploration log listing each dataset examined and why it didn't fit
 3. If a proxy exists, use it with an explicit caveat
 
+**A department's own web app is not a dataset miss.** If no dataset exists but
+the department publishes the data on its site (an RSS feed, a JSON endpoint, a
+catalogue page), use that source — and label it as scraped, with the URL and
+the reason there is no dataset. Example: the HKPL catalogue's per-branch
+loan status is not an open dataset, but it is the authoritative answer.
+
 ## Answer contract (when a program answers)
 
 Every successful answer MUST include, alongside the direct answer:
 
 1. **Dataset ID** (and the source department) — so the claim is re-checkable.
+   If the figures come from a department's **web app rather than an open
+   dataset** (scraped HTML, an undocumented feed), say so explicitly:
+   *"no open dataset — scraped from the <department> catalogue"* and give the
+   URL. A scraped figure is weaker evidence than a published one, and the
+   user needs to know which they are getting.
 2. **Endpoint** actually queried (URL).
 3. **Data timestamp** of the figures themselves, in **HKT**, distinct from
    "retrieved at" — e.g. "figures are as at 2026-03-13 (HKT)".
