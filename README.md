@@ -76,7 +76,45 @@ reindex                             embed docstrings
 
 You are a **coding agent**, not a search wizard. When a question is new, you
 explore (`catalog-search` → `info` → `test`), write a function, run it to answer,
-then `reindex` — the next time that question comes up it's a one-step lookup:
+then `reindex` — the next time that question comes up it's a one-step lookup.
+
+```mermaid
+flowchart TD
+    subgraph answer["Answer loop — every question"]
+        PS["programs-search<br/>hybrid: embeddings + keyword"]
+        HIT{"does a program<br/>cover it?"}
+        RUN["run the returned source<br/>bash hk.sh python &lt;&lt;EOF"]
+        CS["catalog-search<br/>all 3,822 datasets"]
+        IT["info &lt;id&gt; → test &lt;url&gt;<br/>detect JSON / XML / CSV"]
+        ANS(["answer with a source<br/>dataset ID · endpoint · HKT timestamp"])
+        WRITE["write programs/&lt;org&gt;/&lt;file&gt;.py<br/>one function = one capability"]
+        RI["reindex"]
+
+        PS --> HIT
+        HIT -->|"Path A — yes"| RUN
+        HIT -->|"Path B — no"| CS
+        RUN --> ANS
+        CS --> IT --> ANS
+        ANS -.->|"after the answer"| WRITE
+        WRITE --> RI
+    end
+
+    subgraph build["Index build — once, then incremental"]
+        SH[("data/catalog/*.jsonl<br/>8 shards · 3,822 datasets")]
+        PROG[/"programs/**/*.py<br/>docstring = retrieval surface"/]
+        CSTORE[("hkdata_datasets<br/>what exists")]
+        PSTORE[("hkdata_programs<br/>how to answer")]
+        SH -->|catalog-embed| CSTORE
+        PROG -->|reindex| PSTORE
+    end
+
+    Q["question — English or 繁體中文"] --> PS
+    CSTORE -.-> CS
+    PSTORE -.-> PS
+    RI -.-> PSTORE
+```
+
+Concretely, for *"gym room in Cheung Sha Wan"*:
 
 ```text
 1. programs-search "gym room Cheung Sha Wan"     → no hit

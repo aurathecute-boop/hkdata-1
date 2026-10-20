@@ -74,6 +74,44 @@ reindex                             嵌入 docstring
 （`catalog-search` → `info` → `test`）、寫一個函數、執行它以回答，然後 `reindex`
 —— 下次同類問題就只需一步查詢：
 
+```mermaid
+flowchart TD
+    subgraph answer["回答流程 — 每條問題"]
+        PS["programs-search<br/>混合檢索：向量 + 關鍵字"]
+        HIT{"已有程式<br/>覆蓋嗎？"}
+        RUN["執行回傳的原始碼<br/>bash hk.sh python &lt;&lt;EOF"]
+        CS["catalog-search<br/>全部 3,822 個 dataset"]
+        IT["info &lt;id&gt; → test &lt;url&gt;<br/>偵測 JSON / XML / CSV"]
+        ANS(["附出處的答案<br/>dataset ID · endpoint · 香港時間戳"])
+        WRITE["寫入 programs/&lt;部門&gt;/&lt;檔案&gt;.py<br/>一函數一能力"]
+        RI["reindex"]
+
+        PS --> HIT
+        HIT -->|"Path A — 有"| RUN
+        HIT -->|"Path B — 沒有"| CS
+        RUN --> ANS
+        CS --> IT --> ANS
+        ANS -.->|"回答之後"| WRITE
+        WRITE --> RI
+    end
+
+    subgraph build["索引建立 — 一次性，其後增量"]
+        SH[("data/catalog/*.jsonl<br/>8 個 shard · 3,822 個 dataset")]
+        PROG[/"programs/**/*.py<br/>docstring = 檢索介面"/]
+        CSTORE[("hkdata_datasets<br/>有哪些數據")]
+        PSTORE[("hkdata_programs<br/>如何回答")]
+        SH -->|catalog-embed| CSTORE
+        PROG -->|reindex| PSTORE
+    end
+
+    Q["問題 — 英文或繁體中文"] --> PS
+    CSTORE -.-> CS
+    PSTORE -.-> PS
+    RI -.-> PSTORE
+```
+
+以*「長沙灣健身室」*為例：
+
 ```text
 1. programs-search "長沙灣 健身室"               → 沒有命中
 2. catalog-search   "gym room"                  → hk-lcsd-facility-facility-fit
