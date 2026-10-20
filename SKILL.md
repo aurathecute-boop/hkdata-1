@@ -82,7 +82,7 @@ EOF
 Compose when needed: `function_a(...) + new_function_b(...)`, all in that
 throwaway heredoc.
 
-### Path B — nothing covers it (explore, then write a program)
+### Path B — nothing covers it (discover → answer → remember)
 
 ```bash
 bash "$SKILL_DIR/hk.sh" catalog-search "<query>"    # discovery over all ~3,822 datasets
@@ -90,16 +90,24 @@ bash "$SKILL_DIR/hk.sh" info "<dataset-id>"          # metadata + endpoint URLs
 bash "$SKILL_DIR/hk.sh" test "<endpoint-url>"        # fetch + detect JSON/XML/CSV
 ```
 
-Once you have a working recipe, **write it as a reusable function** (a whole class
-of questions, not this one instance) under `programs/<org>/<file>.py` (copy
-`programs/_template.py` for the docstring contract), combine it with any existing
-function to answer, then index it:
+Three steps, in this order:
 
-```bash
-bash "$SKILL_DIR/hk.sh" reindex
-```
+1. **Discover** — `catalog-search` → `info` → `test`. Seconds.
+2. **Answer now** — fetch the data and answer, per the answer contract.
+3. **Remember** — write the working recipe as a reusable function (a whole
+   class of questions, not this one instance) under `programs/<org>/<file>.py`
+   (copy `programs/_template.py` for the docstring contract), then index it:
+   ```bash
+   bash "$SKILL_DIR/hk.sh" reindex
+   ```
+   That makes the *next* similar question a Path-A hit — the learning loop.
 
-That makes the *next* similar question a Path-A hit — this is the learning loop.
+**The answer never waits for step 3.** The program is a *memory* for the next
+question, not a prerequisite for this one: step 3 only pays off later, while
+the user is waiting for the answer now. Fetch the data for step 2 with `test`
+or a throwaway snippet — don't delay the answer by writing the function first.
+Do step 3 in the same turn, after the answer, and close with one line naming
+the file and that it was indexed.
 
 ## Program docstring contract
 
@@ -143,6 +151,9 @@ Every successful answer MUST include, alongside the direct answer:
 2. **Endpoint** actually queried (URL).
 3. **Data timestamp** of the figures themselves, in **HKT**, distinct from
    "retrieved at" — e.g. "figures are as at 2026-03-13 (HKT)".
+
+When Path B also wrote a program, close with one line naming the file and
+that it was indexed — the user should see the loop close without re-reading.
 
 The program's docstring carries the dataset ID and endpoint; the data's own
 timestamp comes from the returned records. Presentation: multiple rows → a table;

@@ -91,10 +91,22 @@ native web search. Do not try to satisfy them with this skill.
 
 ## Subagent delegation
 
-For complex discovery you may spawn a **single** subagent with shell and file
-access to run Path B end-to-end (catalog-search → info → test → write program →
-reindex). Do not split into multiple subagents. Use the highest-reasoning model
-available in your agent tool.
+The **order** in `SKILL.md` is fixed: discover → answer → remember. A delegated
+agent must not invert it.
+
+- **Discovery** may run in a **single** subagent with shell and file access
+  (catalog-search → info → test). It returns the working recipe — dataset id,
+  endpoint, payload shape, observed quirks — and the main agent answers from
+  that.
+- **The program write** (the "remember" step) may also be delegated, but only
+  after the answer is delivered; the main agent still runs `reindex`.
+- Do not split discovery across multiple subagents. Use the highest-reasoning
+  model available in your agent tool.
+
+**Answer first.** The program is a memory for the *next* question; it must
+never delay the current one. If a subagent's write is slow or fails, the
+answer stands on its own — a missing program costs a future re-discovery
+(seconds), a withheld answer costs the user the whole turn.
 
 ## End-to-end test (clean clone)
 

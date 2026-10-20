@@ -2,6 +2,25 @@
 
 Supplementary guidance for the hkdata discovery workflow.
 
+## Order of Operations
+
+**Discover → answer → remember.** The program write is *last*, not first.
+
+| Step | What | Blocking? |
+|---|---|---|
+| 1. Discover | `programs-search` → `catalog-search` → `info` → `test` | yes — seconds |
+| 2. Answer | fetch the data, answer per the answer contract | yes — this is the deliverable |
+| 3. Remember | write `programs/<org>/<file>.py`, then `reindex` | no — it pays off on the *next* question |
+
+Why the order matters: writing a program is a **speculative** investment. It
+pays off only the next time someone asks a similar question, so it must not sit
+between the user and the answer they are waiting for now. Fetch the data for
+the answer with `test` or a throwaway snippet; the function comes afterwards.
+
+The answer must never depend on the program existing. If the write fails or
+runs long, the answer still stands — the only cost is that the next similar
+question re-discovers the dataset, which takes seconds.
+
 ## Query Response Template
 
 When answering queries using this skill, follow this structure:

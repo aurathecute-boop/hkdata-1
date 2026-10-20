@@ -80,3 +80,35 @@ def test_skill_md_documents_the_program_library():
     content = (ROOT / "SKILL.md").read_text(encoding="utf-8")
     for needle in ("programs-search", "catalog-search", "reindex", "hk.sh"):
         assert needle in content, f"SKILL.md lost the {needle!r} reference"
+
+
+def test_skill_md_answers_before_it_remembers():
+    """The program write must not sit between the user and the answer.
+
+    Writing a program is a speculative investment: it pays off on the *next*
+    question, so it goes last. A silent reordering back to write-then-answer
+    puts minutes of authoring in front of a five-second answer.
+    """
+    content = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    path_b = content[content.index("### Path B"):]
+    path_b = path_b[:path_b.index("\n## ", 1)] if "\n## " in path_b else path_b
+
+    answer_at = path_b.index("**Answer now**")
+    remember_at = path_b.index("**Remember**")
+    assert answer_at < remember_at, (
+        "Path B must answer before it writes the program "
+        f"(answer at {answer_at}, remember at {remember_at})"
+    )
+    assert "never waits" in path_b, (
+        "Path B must state that the answer does not wait for the program write"
+    )
+
+
+def test_agents_md_keeps_the_delegation_order():
+    """A delegated agent must not invert discover → answer → remember."""
+    content = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    section = content[content.index("## Subagent delegation"):]
+    section = section[:section.index("\n## ", 1)]
+    assert "Answer first" in section, (
+        "the delegation rule must keep the answer ahead of the program write"
+    )
