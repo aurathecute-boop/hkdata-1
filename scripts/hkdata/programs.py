@@ -21,6 +21,7 @@ import ast
 import json
 import re
 import sys
+import textwrap
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
@@ -136,8 +137,73 @@ def _func_source(node: ast.FunctionDef, lines: List[str]) -> str:
     return "\n".join(lines[start - 1:node.end_lineno]).rstrip("\n")
 
 
+def _module_segments(tree: ast.Module) -> Dict[str, tuple]:
+    """Map module-level names to their ``(start, end)`` source spans.
+
+    Covers private helpers (``def _parse_*``) and module-level constants, which a
+    function may reference but ``_func_source`` does not include. ``extract``
+    inlines whatever a function touches so the returned source stays runnable
+    when pasted into a bare interpreter.
+    """
+    segments: Dict[str, tuple] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            segments.setdefault(node.name, (node.lineno, node.end_lineno))
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                for name in ast.walk(target):
+                    if isinstance(name, ast.Name):
+                        segments.setdefault(name.id,
+                                            (node.lineno, node.end_lineno))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            segments.setdefault(node.target.id,
+                                (node.lineno, node.end_lineno))
+    return segments
+
+
+def _loaded_names(node: ast.AST) -> set:
+    """Names read (``Load``) anywhere inside ``node``."""
+    return {n.id for n in ast.walk(node)
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+
+
+def _prelude_blocks(node: ast.FunctionDef,
+                    segments: Dict[str, tuple],
+                    lines: List[str]) -> List[str]:
+    """Source blocks for the module-level names ``node`` depends on.
+
+    Resolves transitively (a helper's own helper/constant comes too) and keeps
+    the original source order, so the prelude reads top-down like the module.
+    """
+    spans: Dict[tuple, None] = {}
+    seen: set = set()
+    pending: List[ast.AST] = [node]
+    while pending:
+        current = pending.pop()
+        for name in sorted(_loaded_names(current)):
+            if name in seen or name not in segments:
+                continue
+            seen.add(name)
+            span = segments[name]
+            if span == (getattr(node, "lineno", None),
+                        getattr(node, "end_lineno", None)):
+                continue  # never inline the function into itself
+            spans[span] = None
+            segment = "\n".join(lines[span[0] - 1:span[1]])
+            try:
+                pending.append(ast.parse(textwrap.dedent(segment)))
+            except SyntaxError:
+                continue
+    return ["\n".join(lines[start - 1:end]).rstrip("\n")
+            for start, end in sorted(spans)]
+
+
 def extract() -> List[Dict]:
-    """AST-walk ``programs/`` into one record per top-level function."""
+    """AST-walk ``programs/`` into one record per top-level function.
+
+    ``source`` is self-contained: any module-level helper or constant the
+    function references is inlined ahead of it.
+    """
     if not PROGRAMS_DIR.exists():
         return []
 
@@ -155,6 +221,7 @@ def extract() -> List[Dict]:
             continue
 
         lines = source.splitlines()
+        segments = _module_segments(tree)
         rel = path.relative_to(PROGRAMS_DIR)
         module = _module_id(rel)
         for node in tree.body:
@@ -163,12 +230,14 @@ def extract() -> List[Dict]:
             if node.name.startswith("_"):
                 continue
             doc = _parse_docstring(ast.get_docstring(node, clean=True))
+            prelude = _prelude_blocks(node, segments, lines)
+            body = _func_source(node, lines)
             records.append({
                 "id": f"{module}:{node.name}",
                 "module": module,
                 "func_name": node.name,
                 "signature": _func_signature(node, lines),
-                "source": _func_source(node, lines),
+                "source": "\n\n".join(prelude + [body]),
                 "path": str(rel),
                 "lineno": node.lineno,
                 **doc,
@@ -208,6 +277,7 @@ def build_metadata(rec: Dict, model: str) -> Dict:
         "func_name": rec["func_name"],
         "signature": rec["signature"],
         "source": rec["source"],
+        "source_hash": vectors.text_hash(rec["source"]),
         "path": rec["path"],
         "lineno": rec["lineno"],
         "datasets": ",".join(rec.get("datasets") or []),
@@ -258,6 +328,7 @@ def build_vectors(model: str = vectors.DEFAULT_MODEL,
         metas[rec["id"]] = meta
         old = known.get(rec["id"])
         if (old is None or old.get("text_hash") != meta["text_hash"]
+                or old.get("source_hash") != meta["source_hash"]
                 or old.get("model") != model):
             pending.append(rec)
 

@@ -154,9 +154,9 @@ def cmd_reindex(args: argparse.Namespace) -> int:
     programs.render_registry(records)
     if not vectors.have_chromadb():
         _eprint(f"Rendered programs/index.md ({len(records)} functions). "
-                f"ChromaDB not installed — install it (SETUP.md) to build the "
-                f"search store.")
-        return 0
+                f"ChromaDB not installed — the program search store was NOT "
+                f"built. Install it (SETUP.md) and re-run reindex.")
+        return 1
     embedder = _resolve_embedder(args)
     try:
         result = programs.build_vectors(

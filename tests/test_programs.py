@@ -134,3 +134,117 @@ def test_status_counts(prog_dir):
     info = programs_mod.status()
     assert info["functions"] == 1
     assert info["program_files"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Self-contained source (module-level helpers are inlined)
+# ---------------------------------------------------------------------------
+
+HELPER_SAMPLE = '''"""Module with a private helper and a constant."""
+
+_BASE = "https://example.com"
+
+
+def _url(name):
+    return f"{_BASE}/{name}.json"
+
+
+def upper_rows() -> list:
+    """Rows from the helper-backed endpoint.
+
+    Provides:
+        - rows
+
+    Datasets:   hk-x
+    Department: Foo
+    Endpoint:   https://example.com/x.json
+    Questions:
+        - "rows?"
+
+    Quirks:
+        - none
+    """
+    import json
+    import urllib.request
+
+    with urllib.request.urlopen(_url("x")) as resp:
+        return json.loads(resp.read())
+'''
+
+
+@pytest.fixture
+def helper_dir(tmp_path, monkeypatch):
+    d = tmp_path / "programs"
+    (d / "demo").mkdir(parents=True)
+    (d / "demo" / "rows.py").write_text(HELPER_SAMPLE, encoding="utf-8")
+    (d / "__init__.py").write_text('"""pkg"""\n', encoding="utf-8")
+    monkeypatch.setattr(programs_mod, "PROGRAMS_DIR", d)
+    return d
+
+
+def test_extract_inlines_module_helpers(helper_dir):
+    rec = next(r for r in extract() if r["func_name"] == "upper_rows")
+    source = rec["source"]
+    assert "_BASE = " in source
+    assert "def _url(name):" in source
+    assert "def upper_rows" in source
+    # helper definitions must precede the function that calls them
+    assert source.index("def _url") < source.index("def upper_rows")
+    ns: dict = {}
+    exec(source, ns)
+    assert callable(ns["upper_rows"])
+
+
+def test_metadata_source_hash_tracks_body(helper_dir):
+    rec = next(r for r in extract() if r["func_name"] == "upper_rows")
+    before = build_metadata(rec, "m")["source_hash"]
+    changed = dict(rec, source=rec["source"].replace("resp.read()", "b'[]'"))
+    after = build_metadata(changed, "m")["source_hash"]
+    assert before != after
+
+
+def test_repo_programs_sources_are_self_contained():
+    """Every embedded source must bind the module-level names it references."""
+    import ast as _ast
+
+    records = extract()
+    assert records
+    for rec in records:
+        path = programs_mod.PROGRAMS_DIR / rec["path"]
+        tree = _ast.parse(path.read_text(encoding="utf-8"))
+        module_names = set(programs_mod._module_segments(tree))
+        used = programs_mod._loaded_names(_ast.parse(rec["source"]))
+        ns: dict = {}
+        exec(rec["source"], ns)
+        missing = sorted((module_names & used) - set(ns))
+        assert not missing, f"{rec['id']} references missing module names: {missing}"
+
+
+def test_build_vectors_reembeds_when_source_changes(prog_dir):
+    chromadb = pytest.importorskip("chromadb")
+    client = chromadb.EphemeralClient()
+
+    def embed(texts):
+        return [[1.0, 0.0] for _ in texts]
+
+    first = programs_mod.build_vectors(embed_fn=embed, client=client,
+                                       collection_name="t_prog_src", verbose=False)
+    assert first["embedded"] == 1
+
+    again = programs_mod.build_vectors(embed_fn=embed, client=client,
+                                       collection_name="t_prog_src", verbose=False)
+    assert again["embedded"] == 0
+
+    path = prog_dir / "lcsd" / "facility.py"
+    path.write_text(
+        SAMPLE.replace("return json.loads(r.read())",
+                       "return [json.loads(r.read())]"),
+        encoding="utf-8")
+
+    changed = programs_mod.build_vectors(embed_fn=embed, client=client,
+                                         collection_name="t_prog_src", verbose=False)
+    assert changed["embedded"] == 1
+    stored = client.get_collection("t_prog_src").get(
+        ids=["lcsd.facility:fitness_rooms"])["metadatas"][0]
+    assert "[json.loads(r.read())]" in stored["source"]
+
