@@ -4,7 +4,7 @@
 面向 [DATA.GOV.HK](https://data.gov.hk)（資料一線通）開放數據。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![datasets](https://img.shields.io/badge/datasets-3%2C822-blueviolet.svg)](https://data.gov.hk)
 [![version](https://img.shields.io/badge/version-0.4.0-lightgrey.svg)](scripts/hkdata/__init__.py)
 
@@ -96,7 +96,7 @@ reindex                             嵌入 docstring
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements-vectors.txt
+.venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt
 ollama pull embeddinggemma-2:740m
 
 bash ./hk.sh catalog-embed                 # 約 10 分鐘（shard 已 committed，無須爬取）
@@ -141,8 +141,14 @@ bash ./hk.sh embed-status
 | `info "<id>"` | Dataset metadata（`package_show`） |
 | `test "<url>"` | 測試 endpoint，自動偵測 JSON / XML / CSV |
 
-所有命令均經 `bash ./hk.sh` 執行，它會在需要 `chromadb` 時自動選用 `.venv`，
-否則使用普通 `python3` —— 你無須自行選擇。
+所有命令均經 `bash ./hk.sh` 執行，它會在需要 `chromadb` 或程式依賴時自動選用
+`.venv`，否則使用普通 `python3`。貼上程式原始碼時請用 venv：
+
+```bash
+bash ./hk.sh python - <<'EOF'
+…貼上並呼叫函數…
+EOF
+```
 
 ### 嵌入 backend
 
@@ -201,7 +207,7 @@ tests/                    pytest 測試
 ## 測試
 
 ```bash
-.venv/bin/pip install -r requirements-vectors.txt -r requirements-dev.txt
+.venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt -r requirements-dev.txt
 .venv/bin/python -m pytest tests/ -q
 ```
 

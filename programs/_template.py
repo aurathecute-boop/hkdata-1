@@ -11,6 +11,11 @@ Contract
   right ``programs/<org>/`` subpackage.
 - Functions return JSON-serializable data (dict / list / scalar). **Never print**
   inside a library function.
+- Imports go *inside* the function, and helpers/constants in this file are
+  inlined by ``reindex`` — so never import another ``programs/`` module.
+- Use the mainstream library, not a hand-rolled parser: ``requests`` for HTTP,
+  ``pandas`` for CSV/XLSX/joins, ``lxml.html`` for scraped tables,
+  ``feedparser`` for RSS. The source runs in the skill venv (Python 3.11+).
 - The docstring uses the section fields below. ``Provides`` / ``Coverage`` /
   ``Questions`` are the most important — ``Questions`` is the retrieval aid that
   lets a reworded query still hit this function.

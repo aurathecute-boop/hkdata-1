@@ -1,0 +1,39 @@
+# Program-layer dependencies — what `programs/*.py` may import at answer time.
+#
+# The CLI engine stays stdlib-only apart from chromadb. These packages are for
+# the programs themselves (runnable capabilities) and for composing answers.
+# Each function keeps its imports inside the body, and `extract()` inlines the
+# module-level private helpers/constants it references, so the source returned
+# by `programs-search --source` stays runnable as one paste.
+#
+# Setup:
+#   python3 -m venv .venv
+#   .venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt
+#   ollama pull embeddinggemma-2:740m
+#
+# Run a program (Path A):
+#   bash ./hk.sh python - <<'EOF'
+#   from programs.lcsd.facility import fitness_rooms
+#   print(fitness_rooms()[:1])
+#   EOF
+#
+# Python: 3.11+ (pandas 3 needs 3.11; requests/feedparser need 3.10).
+# Verified on 3.14.7 (cp314 wheels exist for pandas, lxml, numpy; chromadb is abi3).
+
+# HTTP: sessions, retries, streaming, sane timeouts — replaces hand-rolled
+# urllib.request.Request(...) boilerplate across the program library.
+requests>=2.31,<3
+
+# Tabular data: XLSX, messy multi-header CSV, and joins/groupby in answer code.
+# 2.2 keeps older 3.11/3.12 environments installable; 3.x resolves on 3.14+.
+pandas>=2.2,<4
+
+# HTML table + XML/RSS parsing backend for pandas.read_html / read_xml.
+lxml>=5.2,<7
+
+# XLSX reader engine (pandas delegates to it) — unlocks the data.gov.hk
+# spreadsheet resources that the engine reports as binary.
+openpyxl>=3.1,<4
+
+# RSS 2.0 / Atom for the HKPL syndication feeds, incl. RFC-822 pubDate parsing.
+feedparser>=6.0,<7

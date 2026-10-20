@@ -70,17 +70,18 @@ bash "$SKILL_DIR/hk.sh" programs-search "<user query>"
 ```
 
 Retrieve the top-k functions (bilingual semantic + keyword). If one covers the
-question, **paste its source into a terminal and run it** — write-and-run on the
-fly, no file I/O:
+question, **run its source in the skill venv** — no file I/O:
 
 ```bash
-python3 - <<'EOF'
+bash "$SKILL_DIR/hk.sh" python - <<'EOF'
 <paste the returned source, then call it>
 EOF
 ```
 
-Compose when needed: `function_a(...) + new_function_b(...)`, all in that
-throwaway heredoc.
+`hk.sh python` is the venv interpreter (`requests` / `pandas` / `lxml` /
+`feedparser` live there), so the same paste runs a 4-line CSV fetcher and a
+workbook reader alike. Compose when needed: `function_a(...) +
+new_function_b(...)`, all in that throwaway heredoc.
 
 ### Path B — nothing covers it (discover → answer → remember)
 
@@ -109,6 +110,34 @@ or a throwaway snippet — don't delay the answer by writing the function first.
 Do step 3 in the same turn, after the answer, and close with one line naming
 the file and that it was indexed.
 
+## Write efficient programs — don't reinvent the wheel
+
+Programs run in the skill venv (Python 3.11+), not a restricted sandbox. Use the
+mainstream library for the job instead of hand-rolling the parser or the client:
+
+| Task | Use | Don't |
+|---|---|---|
+| HTTP (one call or many) | `requests` (`timeout=`, `.raise_for_status()`) | `urllib.request` + hand-built headers |
+| CSV / XLSX / joins / groupby | `pandas` (`read_csv`, `read_excel`, `merge`, `groupby`) | `csv.DictReader` loops, unzipping XLSX by hand |
+| HTML tables / scraped pages | `lxml.html` (or `pandas.read_html`) | `re.findall(r"<td>…")` |
+| RSS / Atom feeds | `feedparser` (incl. RFC-822 dates) | regex over `<item>` + `strptime` |
+| JSON APIs | `resp.json()` | `json.loads(resp.read().decode())` |
+
+Rules that keep a program reusable:
+
+- **Imports go inside the function.** The source is pasted verbatim, so it must
+  import everything it uses.
+- **Helpers in the same file are fine.** `reindex` inlines the module-level
+  private functions/constants a program references, so the stored source stays
+  runnable. Never import from another `programs/` module — that cannot be
+  inlined; duplicate the few lines instead.
+- **Return JSON-serializable data** — `.to_dict("records")`, empty cells as
+  `None` (not `NaN`), never a DataFrame, never `print()`.
+- **One function = one capability** — a family of future questions, not one fact.
+
+Spreadsheet resources (`xlsx`/`xls`, ~1,400 datasets) have no JSON endpoint:
+call `xlsx_preview(url)` to find the header row, then `xlsx_rows(url, header=n)`.
+
 ## Program docstring contract
 
 Every function's docstring is both the retrieval surface and the reading surface.
@@ -124,6 +153,7 @@ function.
 | Command | Purpose |
 |---------|---------|
 | `programs-search "<query>" [--source] [--json]` | Semantic search over runnable functions; `--source` prints full source (Path A) |
+| `python [args…]` | Run the skill venv interpreter — `bash hk.sh python - <<'EOF'` runs pasted program source |
 | `reindex` | Extract + embed functions from `programs/`, render the registry |
 | `programs-status` | Program file/function count + vector-store state |
 | `catalog-search "<query>"` | ChromaDB search over the full catalog (Path B discovery) |

@@ -6,7 +6,7 @@
 > **中文版** → [README.zh-HK.md](README.zh-HK.md)
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![datasets](https://img.shields.io/badge/datasets-3%2C822-blueviolet.svg)](https://data.gov.hk)
 [![version](https://img.shields.io/badge/version-0.4.0-lightgrey.svg)](scripts/hkdata/__init__.py)
 
@@ -100,7 +100,7 @@ then `reindex` — the next time that question comes up it's a one-step lookup:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements-vectors.txt
+.venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt
 ollama pull embeddinggemma-2:740m
 
 bash ./hk.sh catalog-embed                 # ~10 min (shards are committed, no crawl)
@@ -146,8 +146,9 @@ bash ./hk.sh embed-status
 | `test "<url>"` | Test an endpoint and detect JSON / XML / CSV |
 
 All commands run through `bash ./hk.sh`, which picks the `.venv` interpreter
-automatically when `chromadb` is needed and falls back to plain `python3`
-otherwise — no need to choose.
+automatically when `chromadb` or the program dependencies are needed, and falls
+back to plain `python3` otherwise. Pasted program source runs in the venv:
+`bash ./hk.sh python - <<'EOF' … EOF`.
 
 ### Embedding backends
 
@@ -209,7 +210,7 @@ store can be regenerated at any time with `catalog-sync`.
 ## Tests
 
 ```bash
-.venv/bin/pip install -r requirements-vectors.txt -r requirements-dev.txt
+.venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt -r requirements-dev.txt
 .venv/bin/python -m pytest tests/ -q
 ```
 

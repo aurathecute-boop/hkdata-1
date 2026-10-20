@@ -4,7 +4,7 @@ First-time setup for **港數通 (hkdata)**. Follow this once; after that an age
 run the workflow in [`SKILL.md`](SKILL.md) directly.
 
 The catalog shards in `data/catalog/` are committed, so setup only needs to
-install the search dependencies and build the vector store — **no crawl required**.
+install the dependencies and build the vector store — **no crawl required**.
 
 ---
 
@@ -12,9 +12,10 @@ install the search dependencies and build the vector store — **no crawl requir
 
 | Component | Why | Check |
 |---|---|---|
-| `python3` | the CLI is stdlib-only | `python3 --version` |
+| `python3` 3.11+ (3.14 verified) | the CLI engine is stdlib-only apart from `chromadb`; the programs use `pandas` (needs 3.11+) | `python3 --version` |
 | [Ollama](https://ollama.com) | serves the default embedding model (optional — any embedding API works) | `ollama --version` |
 | `chromadb` | search store | installed in step 2 |
+| `requests`, `pandas`, `lxml`, `openpyxl`, `feedparser` | what `programs/*.py` may import at answer time | installed in step 2 |
 
 The default embedding model is **`embeddinggemma-2:740m`** — multilingual (English
 + Chinese), 768-dimensional, ~1.3 GB. It is an *asymmetric* model, so queries get a
@@ -33,11 +34,16 @@ prefix (applied for you). To use a different embedding service, set
 python3 -m venv .venv
 ```
 
-**2. Install the search dependency**
+**2. Install the dependencies**
 
 ```bash
-.venv/bin/pip install -r requirements-vectors.txt
+.venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt
 ```
+
+`requirements-vectors.txt` is the search store (`chromadb`);
+`requirements-programs.txt` is what the programs themselves import (`requests`,
+`pandas`, `lxml`, `openpyxl`, `feedparser`). Path A runs your pasted source in
+this venv, so both are needed for the full workflow.
 
 **3. Make sure the Ollama server is running, and pull the model**
 
@@ -61,12 +67,17 @@ Missing:       0
 Locales:       en, tc
 Shards:        8 (16.0 MB)
 Vector store:  empty (run: catalog-embed)
+Programs:      51 functions
+Last full sync: 2026-09-27T02:43:09Z
+Last activity:  2026-09-27T05:13:44Z
 ```
 
-`Vector store: empty` at this point is normal — it is built next. (If you run with
-plain `python3` and no `.venv`, ChromaDB is absent and it prints `unavailable` instead.
-Run `bash ./hk.sh catalog-status` again after step 5 to see the dataset and
-experience counts.)
+`Vector store: empty` at this point is normal — it is built next. Both sync
+timestamps come from the committed snapshot, not from your install time. (If you
+run with plain `python3` and no `.venv`, ChromaDB is absent: it prints
+`unavailable` instead and omits the `Programs:` line. Run
+`bash ./hk.sh catalog-status` again after step 5 to see
+`Vector store: 3822 datasets`.)
 
 **5. Build the vector stores**
 
@@ -75,9 +86,20 @@ bash ./hk.sh catalog-embed      # 3,822 datasets (~10 min)
 bash ./hk.sh reindex            # index the program library (fast)
 ```
 
-Both are incremental: re-running only re-embeds content that changed. Only the
-catalog shards in `data/catalog/` and the `programs/*.py` library are committed,
-so no crawl is needed.
+Both are incremental: re-running only re-embeds functions whose docstring **or
+body** changed. Only the catalog shards in `data/catalog/` and the
+`programs/*.py` library are committed, so no crawl is needed.
+
+The two stores are **independent** — each backs one of the two paths in
+[`SKILL.md`](SKILL.md), and neither needs the other:
+
+| Store | Built by | Collection | Answers |
+|---|---|---|---|
+| catalog | `catalog-embed` | `hkdata_datasets` | "which dataset exists?" (Path B discovery) |
+| programs | `reindex` | `hkdata_programs` | "which function answers this?" (Path A) |
+
+`reindex` takes seconds (it embeds docstrings only — ~50 functions), so run it
+first if you just want Path A working; `catalog-embed` is the ~10-minute one.
 
 **6. Validate the skill loop — 3 hard questions**
 
@@ -114,8 +136,19 @@ Record anything that breaks — a dead endpoint, a missing file, an install erro
 ## Which interpreter runs what
 
 Every command in this guide goes through `bash ./hk.sh`: it picks
-`.venv/bin/python` when the venv exists (search and embed need `chromadb` from
-there), and falls back to `python3` otherwise. You never need to choose.
+`.venv/bin/python` when the venv exists (search, embed, and the program
+dependencies live there), and falls back to `python3` otherwise. You never need
+to choose — except for the Path A paste, where you must use the venv:
+
+```bash
+bash ./hk.sh python - <<'EOF'     # venv interpreter (requests/pandas/lxml/feedparser)
+<paste the program source, then call it>
+EOF
+```
+
+Plain `info`, `test`, `catalog-sync`, and `catalog-status` still work with the
+system `python3`; `programs-search`, `catalog-search`, `catalog-embed`, and
+`reindex` need `chromadb`, and pasted program source needs the venv.
 
 ---
 
@@ -278,7 +311,9 @@ before the first push.
 | `Vector store: unavailable` | You are running with plain `python3`, which has no `chromadb`. Use `bash ./hk.sh catalog-status`. |
 | `Vector store: empty (run: catalog-embed)` | Normal on a fresh clone — build the store with `bash ./hk.sh catalog-embed`. |
 | `ChromaDB is not installed` | `.venv/bin/pip install -r requirements-vectors.txt` |
-| `Ollama embedding failed` | The Ollama server is not running (`ollama serve`) or the model is missing (`ollama pull embeddinggemma-2:740m`). |
+| `reindex` prints `Program store ready` but `programs-search` still returns nothing | It exited 0 without building the store because `chromadb` was missing. Install `requirements-vectors.txt` and re-run; the success line must be `Program store ready: N functions`. |
+| A program fails with `ModuleNotFoundError: pandas/lxml/requests/feedparser` | The paste ran outside the venv. Use `bash ./hk.sh python - <<'EOF'` (not bare `python3`), and install `requirements-programs.txt`. |
+| Ollama embedding failed | The Ollama server is not running (`ollama serve`) or the model is missing (`ollama pull embeddinggemma-2:740m`). |
 | `Vector store is empty` | Run `bash ./hk.sh catalog-embed`. |
 | `catalog-search` returns nothing useful | Confirm `catalog-status` shows `Vector store: 3822 datasets`; then try broader terms or add an abbreviation to `references/aliases.json`. |
-| Tests fail | `.venv/bin/pip install -r requirements-dev.txt` then `.venv/bin/python -m pytest tests/ -q` — the suite is stdlib-only and passes without Ollama. |
+| Tests fail | `.venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt -r requirements-dev.txt` then `.venv/bin/python -m pytest tests/ -q` — the suite passes without Ollama. |

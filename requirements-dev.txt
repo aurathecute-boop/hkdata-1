@@ -1,9 +1,9 @@
 # Development / test dependencies (optional).
 #
 # Setup:
-#   .venv/bin/pip install -r requirements-vectors.txt -r requirements-dev.txt
+#   .venv/bin/pip install -r requirements-vectors.txt -r requirements-programs.txt -r requirements-dev.txt
 #   .venv/bin/python -m pytest tests/ -q
 #
-# The suite imports chromadb lazily (tests skip if it is absent), so pytest is
-# the only hard requirement here.
+# The engine tests skip when chromadb is absent, so pytest is the only hard
+# requirement here; pandas/lxml/feedparser are only needed for the programs.
 pytest>=8

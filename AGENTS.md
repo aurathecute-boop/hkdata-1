@@ -66,11 +66,19 @@ program is written and indexed, the discovery is not "remembered".
    `Questions` is the retrieval aid — write several rewordings.
 4. The function returns JSON-serializable data and **never prints**; imports go
    *inside* the function so the returned source runs standalone in a heredoc.
-5. `bash ./hk.sh reindex` — embeds the docstrings and renders `programs/index.md`
-   (a generated view — never edit it by hand).
+5. Use the mainstream library for the job (`requests`, `pandas`, `lxml`,
+   `feedparser`, `openpyxl`) — see SKILL.md *"Write efficient programs"*. Do not
+   hand-roll HTML/RSS regex or urllib boilerplate.
+6. Helpers/constants in the **same file** are fine: `extract()` inlines them into
+   the returned source. Importing from another `programs/` module is not — the
+   source is pasted standalone, so that import has nothing to resolve against.
+7. `bash ./hk.sh reindex` — embeds the docstrings and renders `programs/index.md`
+   (a generated view — never edit it by hand). Re-running is incremental on both
+   docstring **and** body changes (`source_hash`).
 
 A program that has not run against the live endpoint is not done: `test` the URL
-first, then write the function from what you observed.
+first, then write the function from what you observed — and run it through
+`bash ./hk.sh python - <<'EOF' … EOF`, the interpreter the source will meet.
 
 ## Org → subpackage guidance
 

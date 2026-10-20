@@ -131,7 +131,7 @@ State the temporality in the answer when it affects interpretation (e.g., "last 
 |---|---|
 | Network / download failure | Retry once; if still failing, fall back to most recent verified reference data and flag output as stale with date |
 | `catalog-search` returns no useful results | Web search `site:data.gov.hk <topic>`; if the store is empty, run `catalog-sync --full` then `catalog-embed` |
-| Missing file / dependency | Verify `python3` is installed; verify `./` exists |
+| Missing file / dependency | Verify `python3` 3.11+ and the venv exist (SETUP.md); run pasted source with `bash ./hk.sh python - <<'EOF'` so `requests`/`pandas` resolve |
 | Invalid / corrupt dataset metadata | Skip dataset, log ID, continue with next candidate |
 | All datasets failed | Abort entirely; return "No suitable dataset found on data.gov.hk" with exploration log |
 | Unexpected API schema | Report exact mismatch; do not attempt to parse |
@@ -254,6 +254,8 @@ The two negative situations from the old experience store are now handled inline
 |---------|------------|---------------|
 | `catalog-search` returns nothing at all | Vector store not built, or catalog not crawled | `catalog-sync --full --lang en,tc` → `catalog-embed` → `catalog-search` |
 | `catalog-search` says "ChromaDB is not installed" | chromadb is missing from the venv | `.venv/bin/pip install -r requirements-vectors.txt`, then retry |
+| Pasted program raises `ModuleNotFoundError: pandas` (or `lxml`, `feedparser`, `requests`) | The source ran under the system `python3`, not the skill venv | Run it with `bash ./hk.sh python - <<'EOF'`; install `requirements-programs.txt` |
+| `test` reports an `xlsx`/`xls` resource as binary | Spreadsheets are not text endpoints — the engine only detects them | `xlsx_preview(url)` to find the header row, then `xlsx_rows(url, header=n)` |
 | Chinese abbreviation (e.g. `康文署`) not found | Abbreviations are coined truncations; the full form (`康樂及文化事務署`) is in the tc metadata | Dense embeddings bridge it (cos ≈ 0.79) and `aliases.json` expands it deterministically — add a mapping if one is missing |
 | A dataset the CKAN API used to return is now missing | CKAN `package_search` was retired (Solr covered only ~631/3,822) | Use `catalog-search`, which covers the full catalog |
 | A `geodata.gov.hk` URL 404s or serves nothing | The geodata.gov.hk portal was retired | Re-route to the CSDI Portal `www.map.gov.hk/gs/api/...`; note the re-route in the program's `Quirks` |
