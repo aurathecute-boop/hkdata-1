@@ -76,39 +76,25 @@ reindex                             嵌入 docstring
 
 ```mermaid
 flowchart TD
-    subgraph answer["回答流程 — 每條問題"]
-        PS["programs-search<br/>混合檢索：向量 + 關鍵字"]
-        HIT{"已有程式<br/>覆蓋嗎？"}
-        RUN["執行回傳的原始碼<br/>bash hk.sh python &lt;&lt;EOF"]
-        CS["catalog-search<br/>全部 3,822 個 dataset"]
-        IT["info &lt;id&gt; → test &lt;url&gt;<br/>偵測 JSON / XML / CSV"]
-        ANS(["附出處的答案<br/>dataset ID · endpoint · 香港時間戳"])
-        WRITE["寫入 programs/&lt;部門&gt;/&lt;檔案&gt;.py<br/>一函數一能力"]
-        RI["reindex"]
+    Q(["問題<br/>英文或繁體中文"]) --> PS["programs-search<br/>混合檢索：向量 + 關鍵字"]
+    PS --> D{"已有程式<br/>覆蓋嗎？"}
 
-        PS --> HIT
-        HIT -->|"Path A — 有"| RUN
-        HIT -->|"Path B — 沒有"| CS
-        RUN --> ANS
-        CS --> IT --> ANS
-        ANS -.->|"回答之後"| WRITE
-        WRITE --> RI
-    end
+    D -->|"Path A — 有"| RUN["執行回傳的原始碼<br/>bash hk.sh python &lt;&lt;EOF"]
+    RUN --> A1(["即時作答<br/>dataset ID · endpoint · 香港時間戳"])
 
-    subgraph build["索引建立 — 一次性，其後增量"]
-        SH[("data/catalog/*.jsonl<br/>8 個 shard · 3,822 個 dataset")]
-        PROG[/"programs/**/*.py<br/>docstring = 檢索介面"/]
-        CSTORE[("hkdata_datasets<br/>有哪些數據")]
-        PSTORE[("hkdata_programs<br/>如何回答")]
-        SH -->|catalog-embed| CSTORE
-        PROG -->|reindex| PSTORE
-    end
+    D -->|"Path B — 沒有"| CS["catalog-search<br/>全部 3,822 個 dataset"]
+    CS --> IT["info &lt;id&gt; → test &lt;url&gt;<br/>偵測 JSON / XML / CSV"]
+    IT --> A2(["即時作答<br/>同一合約"])
+    A2 -->|"回答之後"| W["寫入 programs/&lt;部門&gt;/&lt;檔案&gt;.py<br/>一函數一能力"]
+    W --> RI["reindex"]
 
-    Q["問題 — 英文或繁體中文"] --> PS
-    CSTORE -.-> CS
-    PSTORE -.-> PS
-    RI -.-> PSTORE
+    RI -.->|"下次同類問題即走 Path A"| PS
+    A1 --> DONE(["完成"])
+    RI --> DONE
 ```
+
+只有 Path B 會寫程式 —— Path A 直接用既有函數回答後結束。回到 `programs-search`
+的虛線就是學習迴圈：`reindex` 之後，下一條同類問題只需一步。
 
 以*「長沙灣健身室」*為例：
 

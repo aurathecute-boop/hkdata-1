@@ -80,39 +80,26 @@ then `reindex` — the next time that question comes up it's a one-step lookup.
 
 ```mermaid
 flowchart TD
-    subgraph answer["Answer loop — every question"]
-        PS["programs-search<br/>hybrid: embeddings + keyword"]
-        HIT{"does a program<br/>cover it?"}
-        RUN["run the returned source<br/>bash hk.sh python &lt;&lt;EOF"]
-        CS["catalog-search<br/>all 3,822 datasets"]
-        IT["info &lt;id&gt; → test &lt;url&gt;<br/>detect JSON / XML / CSV"]
-        ANS(["answer with a source<br/>dataset ID · endpoint · HKT timestamp"])
-        WRITE["write programs/&lt;org&gt;/&lt;file&gt;.py<br/>one function = one capability"]
-        RI["reindex"]
+    Q(["question<br/>English or 繁體中文"]) --> PS["programs-search<br/>hybrid: embeddings + keyword"]
+    PS --> D{"a program<br/>covers it?"}
 
-        PS --> HIT
-        HIT -->|"Path A — yes"| RUN
-        HIT -->|"Path B — no"| CS
-        RUN --> ANS
-        CS --> IT --> ANS
-        ANS -.->|"after the answer"| WRITE
-        WRITE --> RI
-    end
+    D -->|"Path A — yes"| RUN["run the returned source<br/>bash hk.sh python &lt;&lt;EOF"]
+    RUN --> A1(["answer now<br/>dataset ID · endpoint · HKT timestamp"])
 
-    subgraph build["Index build — once, then incremental"]
-        SH[("data/catalog/*.jsonl<br/>8 shards · 3,822 datasets")]
-        PROG[/"programs/**/*.py<br/>docstring = retrieval surface"/]
-        CSTORE[("hkdata_datasets<br/>what exists")]
-        PSTORE[("hkdata_programs<br/>how to answer")]
-        SH -->|catalog-embed| CSTORE
-        PROG -->|reindex| PSTORE
-    end
+    D -->|"Path B — no"| CS["catalog-search<br/>all 3,822 datasets"]
+    CS --> IT["info &lt;id&gt; → test &lt;url&gt;<br/>detect JSON / XML / CSV"]
+    IT --> A2(["answer now<br/>same contract"])
+    A2 -->|"after the answer"| W["write programs/&lt;org&gt;/&lt;file&gt;.py<br/>one function = one capability"]
+    W --> RI["reindex"]
 
-    Q["question — English or 繁體中文"] --> PS
-    CSTORE -.-> CS
-    PSTORE -.-> PS
-    RI -.-> PSTORE
+    RI -.->|"next similar question is Path A"| PS
+    A1 --> DONE(["done"])
+    RI --> DONE
 ```
+
+Only Path B writes code — Path A answers from an existing function and stops. The dotted
+edge back to `programs-search` is the learning loop: `reindex` makes the next similar
+question a one-step lookup.
 
 Concretely, for *"gym room in Cheung Sha Wan"*:
 
