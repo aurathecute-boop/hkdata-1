@@ -132,16 +132,15 @@ carrying only the engine + `programs/*.py` is exactly what the test checks.
 > fails the build if that ever happens again.
 
 1. Clean the workspace and clone the **remote** (not a local copy) —
-   **outside** this repo, e.g. `~/Projects/agents/hkdata-e2e/`. The remote is
-   private, so clone it with `gh` (authenticated):
+   **outside** this repo, e.g. `~/Projects/agents/hkdata-e2e/`:
    ```bash
    E2E_DIR="${HKDATA_E2E_DIR:-$HOME/Projects/agents/hkdata-e2e}"
    rm -rf "$E2E_DIR" && mkdir -p "$E2E_DIR"
-   gh repo clone gnokit/hkdata "$E2E_DIR/hkdata"
+   git clone https://github.com/gnokit/hkdata.git "$E2E_DIR/hkdata"
    ```
 2. Spawn **one** high-reasoning subagent (shell + file access). It must:
    - work only inside `$E2E_DIR/hkdata`; never read/write the working repo or `~/.agents/skills/hkdata`;
-   - **not** use `SKILL.md`'s root-resolution snippet — the `~/.agents/skills/hkdata` symlink points at the private repo and would silently contaminate the run. Set `export HKDATA_SKILL_DIR=$PWD` inside the clone and run `bash ./hk.sh …`;
+   - **not** use `SKILL.md`'s root-resolution snippet — the `~/.agents/skills/hkdata` symlink points at the working repo and would silently contaminate the run. Set `export HKDATA_SKILL_DIR=$PWD` inside the clone and run `bash ./hk.sh …`;
    - follow `SETUP.md` steps 1–5, then `SETUP.md` §6 — the 3 hard questions through the **full** two-path loop (Path A → Path B, one written program + `reindex` each);
    - write raw commands + output to `$E2E_DIR/REPORT.md` with a verdict and a per-finding PASS/FAIL table.
 3. Expect ~84 tracked files and a green `bash ./hk.sh`-driven run; the suite needs `requirements-dev.txt`. No BLOCKER = pass.

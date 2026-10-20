@@ -265,10 +265,9 @@ shared through the link.
 
 ## Remote hygiene (guard rails)
 
-> The remote `github.com/gnokit/hkdata` is **private**. Clone it with
-> `gh repo clone gnokit/hkdata <dir>` (authenticated); a plain `git clone` of the
-> HTTPS URL fails without credentials. Visibility can change again, so the
-> pre-push gate below still runs.
+> The remote `github.com/gnokit/hkdata` is **public**, so `git clone` of the
+> HTTPS URL works unauthenticated. Visibility can change again, so the pre-push
+> gate below still runs.
 
 This repo is meant to be **shareable as an engine**: `SKILL.md`, `scripts/`,
 `SETUP.md`, the `programs/*.py` function library, the workflow-guides method doc
